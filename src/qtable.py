@@ -23,12 +23,21 @@ class QTable:
         delta = reward + self.discount_factor * max(self.dic[new_state].values()) - self.dic[state][action]
         self.dic[state][action] += self.learning_rate * delta
 
-    def best_action(self, state):
-        if state in self.dic:
-            return max(self.dic[state], key=self.dic[state].get)
-        else:
+    def choose_action(self, state):
+        if state not in self.dic:
             return random.choice(ACTIONS)
-
+        
+        actions_values = self.dic[state]
+        
+        max_value = max(actions_values.values())
+        
+        best_actions = [action for action, value in actions_values.items() if value == max_value]
+        
+        # if random.random() < 0.1:
+        #     return random.choice(ACTIONS)
+        # else:
+        return random.choice(best_actions)
+        
     def print_rewards(self):
 
         for state, actions in self.dic.items():
@@ -36,7 +45,22 @@ class QTable:
             for action, value in actions.items():
                 print(f"  Action: {action}, Value: {value}")
 
-    
+    def print_qtable(self):
+        print("--- Q-Table Summary ---")
+        print(f"Total States: {len(self.dic)}")
+        
+        if not self.dic:
+            print("Q-Table is empty")
+            return
+        
+        sorted_states = sorted(self.dic.items(), key=lambda x: max(x[1].values()), reverse=True)
+        
+        for state, actions in sorted_states[:10]:  # Print top 10 states
+            print(f"\nState: {state}")
+            sorted_actions = sorted(actions.items(), key=lambda x: x[1], reverse=True)
+            for action, value in sorted_actions:
+                print(f"  {action}: {value:.2f}")
+        
 
     def clear(self):
         self.dic = {}
