@@ -8,7 +8,7 @@ JUMP_LEFT = "JUMP_LEFT"
 ACTIONS = [LEFT, RIGHT, JUMP, JUMP_RIGHT, JUMP_LEFT]
 
 class QTable:
-    def __init__(self, learning_rate=0.1, discount_factor=2):
+    def __init__(self, learning_rate=0.1, discount_factor=0.3):
         self.dic = {}
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
@@ -35,6 +35,8 @@ class QTable:
             print(f"State: {state}")
             for action, value in actions.items():
                 print(f"  Action: {action}, Value: {value}")
+
+    
 
     def clear(self):
         self.dic = {}

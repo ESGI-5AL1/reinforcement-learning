@@ -63,6 +63,7 @@ class Game(arcade.Window):
         self.gui_camera = arcade.Camera(self.width, self.height)
 
         self.score = 0
+        self.iteration=0
         self.last_score = 0
         self.no_reward_steps = 0
         self.no_reward_limit = 200
@@ -145,6 +146,7 @@ class Game(arcade.Window):
         self.scene.add_sprite("Coins", coin)
 
     def reset_agent(self):
+        self.iteration +=1
         print("Resetting agent to spawn.")
 
         self.player_sprite.center_x = SPAWN_X
@@ -184,7 +186,9 @@ class Game(arcade.Window):
         self.gui_camera.use()
 
         score_text = f"Score: {self.score}"
+
         arcade.draw_text(score_text, 10, 10, arcade.csscolor.WHITE, 18)
+        arcade.draw_text(f"Itération numéro {self.iteration}",10,30,arcade.csscolor.WHITE,18)
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.UP or key == arcade.key.W:
@@ -227,7 +231,7 @@ class Game(arcade.Window):
 
 
     def on_update(self, delta_time):
-        #self.qtable.print_rewards()
+        self.qtable.print_rewards()
 
         self.current_state = self.get_state()
         self.physics_engine.update()
@@ -236,11 +240,13 @@ class Game(arcade.Window):
 
         if not self.manual:
             # Nous mettons en place un probabilité de 10% d'exploration
-            if random.random() < 0.3:
+            if random.random() < 0.1:
                 action = random.choice(ACTIONS)
             else:
                 # Sinon la meilleure action possible est executé
                 action = self.qtable.best_action(self.current_state)
+            
+            print(f"Action choisie: {action}")
 
             if action == JUMP:
                 if self.physics_engine.can_jump():
@@ -257,6 +263,7 @@ class Game(arcade.Window):
                 self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
 
 
+            
 
 
             reward = 0
@@ -264,7 +271,7 @@ class Game(arcade.Window):
 
             coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
             for coin in coin_hit_list:
-                reward += 1
+                reward += 100
                 positive_reward = True
                 coin.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
@@ -323,6 +330,8 @@ class Game(arcade.Window):
             if bullet.right < 0 or bullet.left > WORLD_WIDTH:
                 bullet.remove_from_sprite_lists()
 
+        if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
+            reward -= 0.1
         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
             self.player_sprite.center_x = self.spawn_x
             self.player_sprite.center_y = self.spawn_y
