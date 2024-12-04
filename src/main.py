@@ -66,7 +66,8 @@ class Game(arcade.Window):
         self.iteration=0
         self.last_score = 0
         self.no_reward_steps = 0
-        self.no_reward_limit = 200
+        self.no_reward_limit = 1000
+        self.can_jump= True
 
         self.collect_coin_sound = arcade.load_sound(":resources:sounds/coin1.wav")
         self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
@@ -146,8 +147,8 @@ class Game(arcade.Window):
         self.scene.add_sprite("Coins", coin)
 
     def reset_agent(self):
+        self.qtable.print_qtable()
         self.iteration +=1
-        print("Resetting agent to spawn.")
 
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
@@ -163,8 +164,14 @@ class Game(arcade.Window):
         green_flag.center_y = 96
         self.scene.add_sprite("Flag", green_flag)
 
+    # def get_state(self):
+    #     return round(self.player_sprite.center_x, -1), round(self.player_sprite.center_y, -1)
+
     def get_state(self):
-        return round(self.player_sprite.center_x, -1), round(self.player_sprite.center_y, -1)
+        # More granular state representation
+        x = int(self.player_sprite.center_x / 50)  # Divide by 50 for finer granularity
+        y = int(self.player_sprite.center_y / 50)
+        return (x, y)
 
     def shoot(self):
         bullet = arcade.Sprite(":resources:images/space_shooter/laserBlue01.png", 0.8)
@@ -218,8 +225,6 @@ class Game(arcade.Window):
         QTABLE = self.qtable
 
         self.last_score = self.score
-        self.qtable = QTable()
-        print(f"Last score was: {self.last_score}")
 
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
@@ -230,41 +235,166 @@ class Game(arcade.Window):
         super().on_close()
 
 
-    def on_update(self, delta_time):
-        self.qtable.print_rewards()
+    # def on_update(self, delta_time):
+    #     self.qtable.print_rewards()
 
+    #     self.current_state = self.get_state()
+    #     self.physics_engine.update()
+    #     self.player_sprite.update_animation(delta_time)
+    #     self.bullet_list.update()
+
+    #     if not self.manual:
+    #         # Nous mettons en place un probabilité de 10% d'exploration
+    #         if random.random() < 0.1:
+    #             action = random.choice(ACTIONS)
+    #         else:
+    #             # Sinon la meilleure action possible est executé
+    #             action = self.qtable.best_action(self.current_state)
+            
+    #         print(f"Action choisie: {action}")
+
+    #         if action == JUMP:
+    #             if self.physics_engine.can_jump():
+    #                 self.player_sprite.change_y = PLAYER_JUMP_SPEED
+    #         elif action == LEFT:
+    #             self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+    #         elif action == RIGHT:
+    #             self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+    #         elif action == JUMP_RIGHT:
+    #             self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+    #             self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
+    #         elif action == JUMP_LEFT:
+    #             self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+    #             self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
+
+
+            
+
+
+    #         reward = 0
+    #         positive_reward = False
+
+    #         coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
+    #         for coin in coin_hit_list:
+    #             reward += 100
+    #             positive_reward = True
+    #             coin.remove_from_sprite_lists()
+    #             arcade.play_sound(self.collect_coin_sound)
+    #             self.score += 10
+
+    #         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
+    #             reward -= 100
+    #             self.reset_agent()
+
+    #         flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
+    #         for flag in flag_hit_list:
+    #             reward += 100
+    #             positive_reward = True
+    #             flag.remove_from_sprite_lists()
+    #             arcade.play_sound(self.collect_coin_sound)
+    #             self.score += 100
+
+    #         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
+    #             reward -= 1
+
+
+
+    #         new_state = self.get_state()
+
+    #         if self.last_action is not None:
+    #             self.qtable.set(self.current_state, self.last_action, reward, new_state)
+
+    #         self.last_action = action
+    #         self.current_state = new_state
+
+
+
+    #         if not positive_reward:
+    #             self.no_reward_steps += 1
+    #             if self.no_reward_steps >= self.no_reward_limit:
+    #                 self.reset_agent()
+    #         else:
+    #             self.no_reward_steps = 0
+
+    #     for enemy in self.scene["Enemies"]:
+    #         enemy.update()
+
+    #     for bullet in self.bullet_list:
+    #         hit_wall_list = arcade.check_for_collision_with_list(bullet, self.scene["Walls"])
+    #         if hit_wall_list:
+    #             bullet.remove_from_sprite_lists()
+
+    #         hit_enemy_list = arcade.check_for_collision_with_list(bullet, self.scene["Enemies"])
+    #         if hit_enemy_list:
+    #             bullet.remove_from_sprite_lists()
+    #             for enemy in hit_enemy_list:
+    #                 enemy.remove_from_sprite_lists()
+    #                 self.score += 5
+
+    #     for bullet in self.bullet_list:
+    #         if bullet.right < 0 or bullet.left > WORLD_WIDTH:
+    #             bullet.remove_from_sprite_lists()
+
+    #     if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
+    #         reward -= 0.1
+    #     if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
+    #         self.player_sprite.center_x = self.spawn_x
+    #         self.player_sprite.center_y = self.spawn_y
+
+    #     if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"]):
+    #         self.score += 100
+    #         self.player_sprite.center_x = self.spawn_x
+    #         self.player_sprite.center_y = self.spawn_y
+
+    #     coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
+    #     green_flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
+
+    #     for coin in coin_hit_list:
+    #         coin.remove_from_sprite_lists()
+    #         arcade.play_sound(self.collect_coin_sound)
+    #         self.score += 1
+
+    #     for flag in green_flag_hit_list:
+    #         flag.remove_from_sprite_lists()
+    #         arcade.play_sound(self.collect_coin_sound)
+    #         self.score += 10
+
+    #     self.center_camera_to_player()
+    
+    def on_update(self, delta_time):
+
+        if self.physics_engine.can_jump():
+            self.can_jump = True
         self.current_state = self.get_state()
         self.physics_engine.update()
         self.player_sprite.update_animation(delta_time)
         self.bullet_list.update()
+        
 
         if not self.manual:
-            # Nous mettons en place un probabilité de 10% d'exploration
             if random.random() < 0.1:
                 action = random.choice(ACTIONS)
             else:
-                # Sinon la meilleure action possible est executé
-                action = self.qtable.best_action(self.current_state)
+                action = self.qtable.choose_action(self.current_state)
             
-            print(f"Action choisie: {action}")
-
             if action == JUMP:
-                if self.physics_engine.can_jump():
+                if self.physics_engine.can_jump() and self.can_jump:
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
+                    self.can_jump = False
+            elif action == JUMP_RIGHT:
+                if self.physics_engine.can_jump() and self.can_jump:
+                    self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+                    self.player_sprite.change_y = PLAYER_JUMP_SPEED
+                    self.can_jump = False
+            elif action == JUMP_LEFT:
+                if self.physics_engine.can_jump() and self.can_jump:
+                    self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+                    self.player_sprite.change_y = PLAYER_JUMP_SPEED
+                    self.can_jump = False
             elif action == LEFT:
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
             elif action == RIGHT:
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
-            elif action == JUMP_RIGHT:
-                self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
-                self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
-            elif action == JUMP_LEFT:
-                self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
-                self.player_sprite.change_y = PLAYER_MOVEMENT_SPEED
-
-
-            
-
 
             reward = 0
             positive_reward = False
@@ -292,8 +422,6 @@ class Game(arcade.Window):
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
                 reward -= 1
 
-
-
             new_state = self.get_state()
 
             if self.last_action is not None:
@@ -301,8 +429,6 @@ class Game(arcade.Window):
 
             self.last_action = action
             self.current_state = new_state
-
-
 
             if not positive_reward:
                 self.no_reward_steps += 1
