@@ -23,32 +23,22 @@ class QTable:
         delta = reward + self.discount_factor * max(self.dic[new_state].values()) - self.dic[state][action]
         self.dic[state][action] += self.learning_rate * delta
 
-    def choose_action(self, state):
-        if state not in self.dic:
-            return random.choice(ACTIONS)
-        
-        actions_values = self.dic[state]
-        
-        max_value = max(actions_values.values())
-        
-        best_actions = [action for action, value in actions_values.items() if value == max_value]
-        
-        # if random.random() < 0.1:
-        #     return random.choice(ACTIONS)
-        # else:
-        return random.choice(best_actions)
+
+    #ici ajouter cas ennemis, tire si ennemis mort bonus, sinon penalité
     
     def choose_action(self, state):
         if state not in self.dic:
             return random.choice(ACTIONS)
-        
-        if random.random() < 0.1:  
+
+        if random.random() < 0.1:
             return random.choice(ACTIONS)
-            
+
         actions_values = self.dic[state]
         max_value = max(actions_values.values())
         best_actions = [action for action, value in actions_values.items() if value == max_value]
-        return best_actions[0] 
+
+        return random.choice(best_actions)
+
         
     def print_rewards(self):
 
