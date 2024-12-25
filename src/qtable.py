@@ -8,7 +8,7 @@ JUMP_LEFT = "JUMP_LEFT"
 ACTIONS = [LEFT, RIGHT, JUMP, JUMP_RIGHT, JUMP_LEFT]
 
 class QTable:
-    def __init__(self, learning_rate=0.1, discount_factor=0.3):
+    def __init__(self, learning_rate=0.1, discount_factor=0.8):
         self.dic = {}
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
@@ -37,6 +37,18 @@ class QTable:
         #     return random.choice(ACTIONS)
         # else:
         return random.choice(best_actions)
+    
+    def choose_action(self, state):
+        if state not in self.dic:
+            return random.choice(ACTIONS)
+        
+        if random.random() < 0.1:  
+            return random.choice(ACTIONS)
+            
+        actions_values = self.dic[state]
+        max_value = max(actions_values.values())
+        best_actions = [action for action, value in actions_values.items() if value == max_value]
+        return best_actions[0] 
         
     def print_rewards(self):
 
