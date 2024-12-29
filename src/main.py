@@ -62,7 +62,7 @@ class Game(arcade.Window):
 
         self.gui_camera = arcade.Camera(self.width, self.height)
 
-        self.score = 0
+        self.reward = 0
         self.iteration=0
         self.last_score = 0
         self.no_reward_steps = 0
@@ -157,8 +157,6 @@ class Game(arcade.Window):
 
         self.no_reward_steps = 0
 
-        self.score = 0
-
         green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
         green_flag.center_x = 1900
         green_flag.center_y = 96
@@ -199,7 +197,7 @@ class Game(arcade.Window):
 
         self.gui_camera.use()
 
-        score_text = f"Score: {self.score}"
+        score_text = f"Score: {self.reward}"
 
         arcade.draw_text(score_text, 10, 10, arcade.csscolor.WHITE, 18)
         arcade.draw_text(f"Itération numéro {self.iteration}",10,30,arcade.csscolor.WHITE,18)
@@ -230,9 +228,6 @@ class Game(arcade.Window):
     def reset_player(self):
         global QTABLE
         QTABLE = self.qtable
-
-        self.last_score = self.score
-
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
 
@@ -242,7 +237,7 @@ class Game(arcade.Window):
         super().on_close()
 
     def on_update(self, delta_time):
-        reward = 0
+        self.reward = 0
         if self.physics_engine.can_jump():
             self.can_jump = True
         self.current_state = self.get_state()
@@ -261,25 +256,25 @@ class Game(arcade.Window):
                 if self.physics_engine.can_jump() and self.can_jump:
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
-                    reward-=4
+                    self.reward-=4
             elif action == JUMP_RIGHT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    reward=+5
+                    self.reward=+5
                     self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == JUMP_LEFT:
                 if self.physics_engine.can_jump() and self.can_jump:
                     
-                    reward-=10
+                    self.reward-=10
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == LEFT:
-                reward-=10
+                self.reward-=10
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
             elif action == RIGHT:
-                reward+=10
+                self.reward+=10
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
 
            
@@ -287,30 +282,30 @@ class Game(arcade.Window):
 
             coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
             for coin in coin_hit_list:
-                reward += 20
+                self.reward += 20
                 positive_reward = True
                 coin.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
                 
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
-                reward -= 100
+                self.reward -= 100
                 self.reset_agent()
 
             flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
             for flag in flag_hit_list:
-                reward += 100
+                self.reward += 100
                 positive_reward = True
                 flag.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
-                reward -= 7
+                self.reward -= 7
 
             new_state = self.get_state()
 
             if self.last_action is not None:
-                self.qtable.set(self.current_state, self.last_action, reward, new_state)
+                self.qtable.set(self.current_state, self.last_action, self.reward, new_state)
 
             self.last_action = action
             self.current_state = new_state
@@ -335,7 +330,7 @@ class Game(arcade.Window):
                 bullet.remove_from_sprite_lists()
                 for enemy in hit_enemy_list:
                     enemy.remove_from_sprite_lists()
-                    reward+=5
+                    self.reward+=5
         for bullet in self.bullet_list:
             if bullet.right < 0 or bullet.left > WORLD_WIDTH:
                 bullet.remove_from_sprite_lists()
