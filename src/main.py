@@ -33,7 +33,8 @@ LEFT = "LEFT"
 RIGHT = "RIGHT"
 JUMP_RIGHT = "JUMP_RIGHT"
 JUMP_LEFT = "JUMP_LEFT"
-ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT]
+SHOOT = "SHOOT"
+ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT,SHOOT]
 
 QTABLE = None
 
@@ -244,7 +245,6 @@ class Game(arcade.Window):
         self.physics_engine.update()
         self.player_sprite.update_animation(delta_time)
         self.bullet_list.update()
-        
 
         if not self.manual:
             if random.random() < 0.2:
@@ -256,26 +256,34 @@ class Game(arcade.Window):
                 if self.physics_engine.can_jump() and self.can_jump:
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
-                    self.reward-=4
+                    self.reward -= 4
             elif action == JUMP_RIGHT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward=+5
+                    self.reward += 5
                     self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == JUMP_LEFT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    
-                    self.reward-=10
+                    self.reward -= 10
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == LEFT:
-                self.reward-=10
+                self.reward -= 10
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+                self.player_sprite.facing_right = False
             elif action == RIGHT:
-                self.reward+=10
+                self.reward += 10
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+                self.player_sprite.facing_right = True
+            elif action == SHOOT:
+                self.shoot()
+                radar = self.radar_detection()
+                self.reward -=2
+                if not radar["enemies"]:
+                    print("pas d'ennemis")
+                    self.reward -= 40
 
            
             positive_reward = False
