@@ -26,12 +26,15 @@ def display_radar_console(radar_info, radius):
     for key, objects in radar_info.items():
         print(f"{key.capitalize()} detected: {len(objects)}")
         for idx, obj in enumerate(objects, 1):
-            print(f"  {key.capitalize()[:-1]} {idx}: (x: {obj['x']}, y: {obj['y']}, distance: {obj['distance']})")
+            print(
+                f"  {key.capitalize()[:-1]} {idx}: "
+                f"(x: {obj['x']}, y: {obj['y']}, distance: {obj['distance']:.2f}, direction: {obj['direction']})"
+            )
 
 
 def display_radar_screen(self, radar_info, radius):
     base_x, base_y = 10, 580  # Position de départ pour l'affichage
-    line_height = 20          # Espacement entre les lignes
+    line_height = 20  # Espacement entre les lignes
 
     arcade.draw_text(f"Radar (Radius: {radius} units):", base_x, base_y, arcade.color.WHITE, 14)
 
@@ -42,7 +45,8 @@ def display_radar_screen(self, radar_info, radius):
         for obj_idx, obj in enumerate(objects, start=1):
             obj_y_offset = y_offset - (obj_idx * line_height)
             arcade.draw_text(
-                f"  {key.capitalize()[:-1]} {obj_idx}: (x: {obj['x']}, y: {obj['y']}, dist: {obj['distance']:.2f})",
+                f"  {key.capitalize()[:-1]} {obj_idx}: (x: {obj['x']}, y: {obj['y']}, "
+                f"dist: {obj['distance']:.2f}, dir: {obj['direction']})",
                 base_x + 20,
                 obj_y_offset,
                 arcade.color.WHITE,

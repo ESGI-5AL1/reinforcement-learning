@@ -364,17 +364,27 @@ class Game(arcade.Window):
             for sprite in sprite_list:
                 distance = arcade.get_distance_between_sprites(self.player_sprite, sprite)
                 if distance <= radius:
+                    # Calculer la direction
+                    direction_x = "right" if sprite.center_x > self.player_sprite.center_x else "left"
+                    direction_y = "up" if sprite.center_y > self.player_sprite.center_y else "down"
+                    direction = f"{direction_x} {direction_y}"
+
                     radar_info[key].append(
                         {
                             "x": round(sprite.center_x, 2),
                             "y": round(sprite.center_y, 2),
                             "distance": round(distance, 2),
+                            "direction": direction,
                         }
                     )
 
-        if display_mode in ("console", "console"):
+        # Affichage selon le mode
+        if display_mode in ("console", "both"):
             from utils import display_radar_console
             display_radar_console(radar_info, radius)
+        if display_mode in ("screen", "both"):
+            from utils import display_radar_screen
+            display_radar_screen(self, radar_info, radius)
 
         return radar_info
 
