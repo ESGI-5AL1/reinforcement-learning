@@ -2,8 +2,8 @@ import arcade
 import random
 from enemy import Enemy
 from qtable import QTable
-from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list
-
+from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_radar_console, \
+    display_radar_screen
 
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 650
@@ -200,8 +200,16 @@ class Game(arcade.Window):
 
         score_text = f"Score: {self.reward}"
 
+
+
+
         arcade.draw_text(score_text, 10, 10, arcade.csscolor.WHITE, 18)
         arcade.draw_text(f"Itération numéro {self.iteration}",10,30,arcade.csscolor.WHITE,18)
+        if hasattr(self, 'radar_info'):  # Vérifie que radar_info a été initialisé
+            from utils import display_radar_screen
+            display_radar_screen(self, self.radar_info, radius=150)
+
+
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.UP or key == arcade.key.W:
@@ -241,6 +249,7 @@ class Game(arcade.Window):
         self.reward = 0
         if self.physics_engine.can_jump():
             self.can_jump = True
+        self.radar_info = self.radar_detection(radius=150, display_mode="screen")
         self.current_state = self.get_state()
         self.physics_engine.update()
         self.player_sprite.update_animation(delta_time)
@@ -344,14 +353,9 @@ class Game(arcade.Window):
                 bullet.remove_from_sprite_lists()
         self.center_camera_to_player()
 
-    def radar_detection(self, radius=150):
-        """
-        Détecte les objets proches du joueur dans un rayon donné.
-        Renvoie un dictionnaire contenant les informations sur les pièces, ennemis, et murs détectés.
-        """
+    def radar_detection(self, radius=150, display_mode="console"):
         radar_info = {"coins": [], "enemies": [], "walls": []}
 
-        # Parcourir chaque liste d'objets (pièces, ennemis, murs)
         for sprite_list, key in [
             (self.scene["Coins"], "coins"),
             (self.scene["Enemies"], "enemies"),
@@ -368,13 +372,9 @@ class Game(arcade.Window):
                         }
                     )
 
-        # Affichage dans la console
-        print("\n=== Radar Detection ===")
-        print(f"Radius: {radius} units")
-        for key, objects in radar_info.items():
-            print(f"{key.capitalize()} detected: {len(objects)}")
-            for idx, obj in enumerate(objects, 1):
-                print(f"  {key.capitalize()[:-1]} {idx}: (x: {obj['x']}, y: {obj['y']}, distance: {obj['distance']})")
+        if display_mode in ("console", "console"):
+            from utils import display_radar_console
+            display_radar_console(radar_info, radius)
 
         return radar_info
 
