@@ -345,31 +345,38 @@ class Game(arcade.Window):
         self.center_camera_to_player()
 
     def radar_detection(self, radius=150):
-        
-        coins_nearby = [
-            (coin.center_x - self.player_sprite.center_x, coin.center_y - self.player_sprite.center_y)
-            for coin in self.scene["Coins"]
-            if arcade.get_distance_between_sprites(self.player_sprite, coin) <= radius
-        ]
+        """
+        Détecte les objets proches du joueur dans un rayon donné.
+        Renvoie un dictionnaire contenant les informations sur les pièces, ennemis, et murs détectés.
+        """
+        radar_info = {"coins": [], "enemies": [], "walls": []}
 
-        enemies_nearby = [
-            (enemy.center_x - self.player_sprite.center_x, enemy.center_y - self.player_sprite.center_y)
-            for enemy in self.scene["Enemies"]
-            if arcade.get_distance_between_sprites(self.player_sprite, enemy) <= radius
-        ]
+        # Parcourir chaque liste d'objets (pièces, ennemis, murs)
+        for sprite_list, key in [
+            (self.scene["Coins"], "coins"),
+            (self.scene["Enemies"], "enemies"),
+            (self.scene["Walls"], "walls"),
+        ]:
+            for sprite in sprite_list:
+                distance = arcade.get_distance_between_sprites(self.player_sprite, sprite)
+                if distance <= radius:
+                    radar_info[key].append(
+                        {
+                            "x": round(sprite.center_x, 2),
+                            "y": round(sprite.center_y, 2),
+                            "distance": round(distance, 2),
+                        }
+                    )
 
-        walls_nearby = [
-            (wall.center_x - self.player_sprite.center_x, wall.center_y - self.player_sprite.center_y)
-            for wall in self.scene["Walls"]
-            if arcade.get_distance_between_sprites(self.player_sprite, wall) <= radius
-        ]
+        # Affichage dans la console
+        print("\n=== Radar Detection ===")
+        print(f"Radius: {radius} units")
+        for key, objects in radar_info.items():
+            print(f"{key.capitalize()} detected: {len(objects)}")
+            for idx, obj in enumerate(objects, 1):
+                print(f"  {key.capitalize()[:-1]} {idx}: (x: {obj['x']}, y: {obj['y']}, distance: {obj['distance']})")
 
-        return {
-            "coins": coins_nearby,
-            "enemies": enemies_nearby,
-            "walls": walls_nearby,
-        }
-
+        return radar_info
 
 
 def main():
