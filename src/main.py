@@ -1,9 +1,12 @@
+import os
+import pickle
+
 import arcade
 import random
 from enemy import Enemy
 from qtable import QTable
 from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_radar_console, \
-    display_radar_screen
+    display_radar_screen, display_menu, load_qtable, save_qtable
 
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 650
@@ -42,10 +45,11 @@ class Game(arcade.Window):
     def __init__(self):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
-
+        self.scores = []
         global  QTABLE
         if QTABLE is None:
-            self.qtable = QTable()
+            loaded_qtable = load_qtable()  # Charge la QTable si elle existe
+            self.qtable = loaded_qtable if loaded_qtable else QTable()  # Utilise la QTable chargée ou une nouvelle
         else:
             self.qtable = QTABLE
 
@@ -205,7 +209,7 @@ class Game(arcade.Window):
 
         arcade.draw_text(score_text, 10, 10, arcade.csscolor.WHITE, 18)
         arcade.draw_text(f"Itération numéro {self.iteration}",10,30,arcade.csscolor.WHITE,18)
-        if hasattr(self, 'radar_info'):  # Vérifie que radar_info a été initialisé
+        if hasattr(self, 'radar_info'):
             from utils import display_radar_screen
             display_radar_screen(self, self.radar_info, radius=150)
 
@@ -243,9 +247,14 @@ class Game(arcade.Window):
     def on_close(self):
         global QTABLE
         QTABLE = self.qtable
+        save_qtable(QTABLE)
         super().on_close()
 
     def on_update(self, delta_time):
+        filename = "scores.pkl"
+        if not os.path.exists(filename):
+            with open(filename, "wb") as f:
+                pickle.dump([], f)
         self.reward = 0
         if self.physics_engine.can_jump():
             self.can_jump = True
@@ -315,6 +324,7 @@ class Game(arcade.Window):
                 positive_reward = True
                 flag.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
+                display_menu(self)
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
                 self.reward -= 7
@@ -327,12 +337,23 @@ class Game(arcade.Window):
             self.last_action = action
             self.current_state = new_state
 
+
             if not positive_reward:
                 self.no_reward_steps += 1
                 if self.no_reward_steps >= self.no_reward_limit:
                     self.reset_agent()
             else:
                 self.no_reward_steps = 0
+
+            self.scores.append(self.reward)
+
+            # Limiter la taille de la liste des scores pour éviter une consommation excessive de mémoire
+            if len(self.scores) > 1000:
+                self.scores.pop(0)
+
+            # Sauvegarder les scores dans un fichier
+            with open("scores.pkl", "wb") as f:
+                pickle.dump(self.scores, f)
 
         for enemy in self.scene["Enemies"]:
             enemy.update()
@@ -378,7 +399,7 @@ class Game(arcade.Window):
                         }
                     )
 
-        # Affichage selon le mode
+        # Affichage en console et sur l'ecran
         if display_mode in ("console", "both"):
             from utils import display_radar_console
             display_radar_console(radar_info, radius)
