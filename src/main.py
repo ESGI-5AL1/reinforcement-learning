@@ -1,6 +1,13 @@
 import os
 import pickle
 
+# ecrase le fichier existant avec une liste vide
+filename = "scores.pkl"
+if os.path.exists(filename):
+    with open(filename, "wb") as f:
+        pickle.dump([], f)
+    print(f"Le fichier {filename} a été réinitialisé.")
+
 import arcade
 import random
 from enemy import Enemy
@@ -42,14 +49,16 @@ ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT,SHOOT]
 QTABLE = None
 
 class Game(arcade.Window):
+
+
     def __init__(self):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
         self.scores = []
         global  QTABLE
         if QTABLE is None:
-            loaded_qtable = load_qtable()  # Charge la QTable si elle existe
-            self.qtable = loaded_qtable if loaded_qtable else QTable()  # Utilise la QTable chargée ou une nouvelle
+            loaded_qtable = load_qtable()
+            self.qtable = loaded_qtable if loaded_qtable else QTable()
         else:
             self.qtable = QTABLE
 
@@ -73,10 +82,11 @@ class Game(arcade.Window):
         self.no_reward_steps = 0
         self.no_reward_limit = 1000
         self.can_jump= True
+        self.flag_reached = False  # Variable pour indiquer si le drapeau est atteint
 
         self.collect_coin_sound = arcade.load_sound(":resources:sounds/coin1.wav")
         self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
-        self.shoot_sound = arcade.load_sound(":resources:sounds/laser1.wav")
+        ##self.shoot_sound = arcade.load_sound(":resources:sounds/laser1.wav")
 
         self.spawn_x = SPAWN_X
         self.spawn_y = SPAWN_Y
@@ -151,23 +161,41 @@ class Game(arcade.Window):
         coin.center_y = 356
         self.scene.add_sprite("Coins", coin)
 
-    def reset_agent(self):
-        self.qtable.print_qtable()
-        self.iteration +=1
+    def reset_agent(self, save_score=True):
+        """
+        Réinitialise l'agent pour une nouvelle itération.
+        Sauvegarde le score uniquement si le drapeau a été atteint.
+        """
+        if save_score and self.flag_reached:
+            # Sauvegarder le score uniquement si le drapeau a été atteint
+            filename = "scores.pkl"
+            if os.path.exists(filename):
+                with open(filename, "rb") as f:
+                    scores = pickle.load(f)
+            else:
+                scores = []
 
+            scores.append(self.reward)  # Ajouter le score final de l'itération
+            with open(filename, "wb") as f:
+                pickle.dump(scores, f)
+
+            print(f"Score sauvegardé pour l'itération {self.iteration}: {self.reward}")
+
+        # Réinitialiser les paramètres pour la prochaine itération
+        self.flag_reached = False  # Réinitialiser le drapeau pour la prochaine itération
+        #self.reward = 0
+        self.iteration += 1
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
-
         self.add_coins()
-
         self.no_reward_steps = 0
 
+        # Réinitialiser le drapeau
         green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
         green_flag.center_x = 1900
         green_flag.center_y = 96
         self.scene.add_sprite("Flag", green_flag)
 
-    
     def get_state(self):
         x = int(self.player_sprite.center_x / 50)
         y = int(self.player_sprite.center_y / 50)
@@ -189,7 +217,7 @@ class Game(arcade.Window):
         bullet.center_x = self.player_sprite.center_x
         bullet.center_y = self.player_sprite.center_y
         self.bullet_list.append(bullet)
-        arcade.play_sound(self.shoot_sound)
+        #arcade.play_sound(self.shoot_sound)
 
     def on_draw(self):
         self.clear()
@@ -203,7 +231,6 @@ class Game(arcade.Window):
         self.gui_camera.use()
 
         score_text = f"Score: {self.reward}"
-
 
 
 
@@ -321,10 +348,12 @@ class Game(arcade.Window):
             flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
             for flag in flag_hit_list:
                 self.reward += 100
+                self.flag_reached = True
                 positive_reward = True
                 flag.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
                 display_menu(self)
+                self.reset_agent()
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
                 self.reward -= 7
@@ -337,23 +366,19 @@ class Game(arcade.Window):
             self.last_action = action
             self.current_state = new_state
 
-
             if not positive_reward:
                 self.no_reward_steps += 1
                 if self.no_reward_steps >= self.no_reward_limit:
-                    self.reset_agent()
+                    print("DEBUG: Trop longtemps sans récompense. Réinitialisation sans sauvegarde.")
+                    self.flag_reached = False  # Assurez-vous que le drapeau n'est pas marqué comme atteint
+                    self.reset_agent(save_score=False)  # Réinitialisation sans sauvegarde
+
             else:
                 self.no_reward_steps = 0
 
-            self.scores.append(self.reward)
 
-            # Limiter la taille de la liste des scores pour éviter une consommation excessive de mémoire
-            if len(self.scores) > 1000:
-                self.scores.pop(0)
 
-            # Sauvegarder les scores dans un fichier
-            with open("scores.pkl", "wb") as f:
-                pickle.dump(self.scores, f)
+
 
         for enemy in self.scene["Enemies"]:
             enemy.update()

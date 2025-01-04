@@ -37,8 +37,8 @@ def display_radar_console(radar_info, radius):
 
 
 def display_radar_screen(self, radar_info, radius):
-    base_x, base_y = 10, 580  # Position de départ pour l'affichage
-    line_height = 20  # Espacement entre les lignes
+    base_x, base_y = 10, 580
+    line_height = 20
 
     arcade.draw_text(f"Radar (Radius: {radius} units):", base_x, base_y, arcade.color.WHITE, 14)
 
@@ -78,7 +78,7 @@ def display_menu(self):
         elif choice == "3":
             self.qtable.print_qtable()
         elif choice == "4":
-            plot_scores()  # Tracer la courbe des scores
+            plot_scores()
         else:
             print("Choix invalide. Veuillez réessayer.")
 
@@ -124,29 +124,30 @@ def print_qtable(qtable):
 
 def plot_scores(filename="scores.pkl"):
     """
-    Charge les scores depuis un fichier et affiche l'évolution des scores avec un graphique.
-    Si le fichier n'existe pas, il est initialisé avec une liste vide.
+    Charge les scores depuis un fichier et affiche leur évolution de manière simplifiée.
     """
-
     if not os.path.exists(filename):
-        print(f"Le fichier {filename} n'existe pas. Aucun score à afficher.")
+        print(f"Aucun fichier trouvé : {filename}.")
         return
 
-    # chargemetn des scrores
+    # Charger les scores
     with open(filename, "rb") as f:
         scores = pickle.load(f)
 
     if not scores:
-        print("Aucun score enregistré. Le graphique ne sera pas généré.")
+        print("Aucun score enregistré.")
         return
 
+    # Afficher le tableau des scores
+    print("\n=== Tableau des scores ===")
+    for iteration, score in enumerate(scores, start=1):
+        print(f"Iteration {iteration}: Score = {score}")
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(scores, label="Scores", marker="o")
+    # Tracer la courbe des scores (style simplifié)
+    plt.plot(scores)
     plt.title("Évolution des scores")
-    plt.xlabel("Itération")
-    plt.ylabel("Score")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    plt.xlabel("Parties")
+    plt.ylabel("Scores")
+    plt.show(block=True)
+
 
