@@ -4,6 +4,8 @@ import pickle
 # Utiliser un le rader pour limiter le nombre de tirs
 # Utiliser variables globales pour recompenses
 # ecrase le fichier existant avec une liste vide
+# calculer distance drapeau, baisse -> bonus
+# 
 filename = "scores.pkl"
 if os.path.exists(filename):
     with open(filename, "wb") as f:
@@ -14,7 +16,7 @@ import arcade
 import random
 # from enemy import Enemy
 from qtable import QTable
-from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_menu, load_qtable, \
+from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_menu, load_qtable, plot_scores, \
     save_qtable
 
 SCREEN_WIDTH = 1000
@@ -53,9 +55,13 @@ QTABLE = None
 rewards = {
     "basic_action": -1,
     "enemy_collision": -100,
-    "flag_collision": +100,
-    "coin_collision": +20
+    "flag_collision": +3000,
+    "coin_collision": +20,
+    "wall_collision": -10,
+    "time_is_up":-200
 }
+
+timer = 40
 
 
 class Game(arcade.Window):
@@ -64,7 +70,7 @@ class Game(arcade.Window):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
 
-        self.set_update_rate(1 / 20000)
+        self.set_update_rate(1 / 10000000)
         self.scores = []
         global QTABLE
         if QTABLE is None:
@@ -75,6 +81,10 @@ class Game(arcade.Window):
 
         self.current_state = None
         self.last_action = None
+
+        self.timer = timer  
+        self.time_elapsed = 0 
+
 
         self.scene = None
         # Déterminer si le joueur ou l'agent a le contrôle
@@ -127,7 +137,7 @@ class Game(arcade.Window):
         self.player_sprite.facing_right = True
         self.scene.add_sprite("Player", self.player_sprite)
 
-        self.add_coins()
+        # self.add_coins()
 
         place_multi_planet_tiles(self, 0, 2000, 64, PLANET_TILE, TILE_SCALING, 32)
         place_multi_planet_tiles(self, 1000, 1300, 64, PLANET_TILE, TILE_SCALING, 450)
@@ -178,8 +188,10 @@ class Game(arcade.Window):
         Réinitialise l'agent pour une nouvelle itération.
         Sauvegarde le score uniquement si le drapeau a été atteint.
         """
+        print(self.current_agent_score)
+
+        self.current_agent_score=0
         if save_score and self.flag_reached:
-            # Sauvegarder le score uniquement si le drapeau a été atteint
             filename = "scores.pkl"
             if os.path.exists(filename):
                 with open(filename, "rb") as f:
@@ -187,7 +199,7 @@ class Game(arcade.Window):
             else:
                 scores = []
 
-            scores.append(self.reward)  # Ajouter le score final de l'itération
+            scores.append(self.reward) 
             with open(filename, "wb") as f:
                 pickle.dump(scores, f)
 
@@ -199,7 +211,7 @@ class Game(arcade.Window):
         self.iteration += 1
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
-        self.add_coins()
+        # self.add_coins()
         self.no_reward_steps = 0
 
         # Réinitialiser le drapeau
@@ -285,6 +297,19 @@ class Game(arcade.Window):
         super().on_close()
 
     def on_update(self, delta_time):
+
+        self.time_elapsed += delta_time
+        if self.time_elapsed >= 1:  
+            self.timer -= 1
+            self.time_elapsed = 0  
+            print(f"Timer: {self.timer} seconds remaining")
+
+        if self.timer <= 0:
+            self.reward-=rewards["time_is_up"]
+            self.reset_agent(save_score=False)
+            self.timer = timer  
+
+
         filename = "scores.pkl"
         if not os.path.exists(filename):
             with open(filename, "wb") as f:
@@ -339,12 +364,12 @@ class Game(arcade.Window):
 
             positive_reward = False
 
-            coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
-            for coin in coin_hit_list:
-                self.reward = rewards["coin_collision"]
-                positive_reward = True
-                coin.remove_from_sprite_lists()
-                arcade.play_sound(self.collect_coin_sound)
+            # coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
+            # for coin in coin_hit_list:
+            #     self.reward = rewards["coin_collision"]
+            #     positive_reward = True
+            #     coin.remove_from_sprite_lists()
+            #     arcade.play_sound(self.collect_coin_sound)
 
             # if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
             #     self.reward -= 100
@@ -361,7 +386,7 @@ class Game(arcade.Window):
                 self.reset_agent()
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
-                self.reward = rewards["flag_collision"]
+                self.reward = rewards["wall_collision"]
 
             new_state = self.get_state()
 
@@ -405,7 +430,7 @@ class Game(arcade.Window):
         radar_info = {"coins": [], "walls": []}
         # reucperer tout les ennemis -> ffaux - recuperer le plus proche
         for sprite_list, key in [
-            (self.scene["Coins"], "coins"),
+            # (self.scene["Coins"], "coins"),
             # (self.scene["Enemies"], "enemies"),
             (self.scene["Walls"], "walls"),
         ]:
@@ -432,6 +457,7 @@ def main():
     window = Game()
     window.setup()
     arcade.run()
+    plot_scores()
 
 
 if __name__ == "__main__":
