@@ -55,7 +55,7 @@ class Game(arcade.Window):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
 
-        self.set_update_rate(1 / 1200)
+        self.set_update_rate(1 / 20000)
         self.scores = []
         global  QTABLE
         if QTABLE is None:
@@ -401,7 +401,7 @@ class Game(arcade.Window):
         # for bullet in self.bullet_list:
         #     if bullet.right < 0 or bullet.left > WORLD_WIDTH:
         #         bullet.remove_from_sprite_lists()
-        # self.center_camera_to_player()
+        self.center_camera_to_player()
 
     def radar_detection(self, radius=150, display_mode="console"):
         radar_info = {"coins": [], "walls": []}
