@@ -7,7 +7,6 @@ class Enemy(arcade.AnimatedWalkingSprite):
     def __init__(self, x, y):
         super().__init__(scale=CHARACTER_SCALING)
 
-        # Load textures for animation
         self.stand_right_textures = [
             arcade.load_texture(":resources:images/animated_characters/zombie/zombie_idle.png")]
         self.stand_left_textures = [

@@ -9,7 +9,7 @@ SHOOT = "SHOOT"
 ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT, SHOOT]
 
 class QTable:
-    def __init__(self, learning_rate=0.1, discount_factor=0.8):
+    def __init__(self, learning_rate=0.5, discount_factor=0.8):
         self.dic = {}
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
@@ -24,10 +24,20 @@ class QTable:
         delta = reward + self.discount_factor * max(self.dic[new_state].values()) - self.dic[state][action]
         self.dic[state][action] += self.learning_rate * delta
 
+    # def choose_action(self, state):
+    #     if state not in self.dic:
+    #         return random.choice(ACTIONS)
+    #     if random.random() < 0.1:  # Exploration mettre à 0 pour l'instant
+    #         return random.choice(ACTIONS)
+    #     actions_values = self.dic[state]
+    #     max_value = max(actions_values.values())
+    #     best_actions = [action for action, value in actions_values.items() if value == max_value]
+    #     return random.choice(best_actions)
+
     def choose_action(self, state):
         if state not in self.dic:
             return random.choice(ACTIONS)
-        if random.random() < 0.1:  # Exploration
+        if False:  # Exploration désactivée
             return random.choice(ACTIONS)
         actions_values = self.dic[state]
         max_value = max(actions_values.values())

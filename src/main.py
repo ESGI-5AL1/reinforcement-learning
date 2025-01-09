@@ -1,6 +1,7 @@
 import os
 import pickle
-
+#Utiliser un le rader pour limiter le nombre de tirs
+#Utiliser variables globales pour recompenses 
 # ecrase le fichier existant avec une liste vide
 filename = "scores.pkl"
 if os.path.exists(filename):
@@ -10,10 +11,9 @@ if os.path.exists(filename):
 
 import arcade
 import random
-from enemy import Enemy
+# from enemy import Enemy
 from qtable import QTable
-from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_radar_console, \
-    display_radar_screen, display_menu, load_qtable, save_qtable
+from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_menu, load_qtable, save_qtable
 
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 650
@@ -44,7 +44,7 @@ RIGHT = "RIGHT"
 JUMP_RIGHT = "JUMP_RIGHT"
 JUMP_LEFT = "JUMP_LEFT"
 SHOOT = "SHOOT"
-ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT,SHOOT]
+ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT]
 
 QTABLE = None
 
@@ -54,6 +54,8 @@ class Game(arcade.Window):
     def __init__(self):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+
+        self.set_update_rate(1 / 1200)
         self.scores = []
         global  QTABLE
         if QTABLE is None:
@@ -132,16 +134,16 @@ class Game(arcade.Window):
         green_flag.center_y = 96
         self.scene.add_sprite("Flag", green_flag)
 
-        for x in range(1600, 1800, 100):
-            enemy = Enemy(x, 128)
-            self.scene.add_sprite("Enemies", enemy)
+        # for x in range(1600, 1800, 100):
+        #     enemy = Enemy(x, 128)
+        #     self.scene.add_sprite("Enemies", enemy)
 
         self.physics_engine = arcade.PhysicsEnginePlatformer(
             self.player_sprite, gravity_constant=GRAVITY, walls=self.scene["Walls"]
         )
 
     def add_coins(self):
-        # place_multi_coins_tiles(self, 128, 1250, 256, COIN_TILE, COIN_SCALING, 96)
+        place_multi_coins_tiles(self, 128, 1250, 256, COIN_TILE, COIN_SCALING, 96)
         place_multi_coins_tiles(self, 1000, 1300, 128, COIN_TILE, COIN_SCALING, 270)
         place_multi_coins_tiles(self, 1000, 1300, 128, COIN_TILE, COIN_SCALING, 520)
         place_multi_coins_tiles(self, 1528, 1700, 128, COIN_TILE, COIN_SCALING, 370)
@@ -179,7 +181,7 @@ class Game(arcade.Window):
             with open(filename, "wb") as f:
                 pickle.dump(scores, f)
 
-            print(f"Score sauvegardé pour l'itération {self.iteration}: {self.reward}")
+            # print(f"Score sauvegardé pour l'itération {self.iteration}: {self.reward}")
 
         # Réinitialiser les paramètres pour la prochaine itération
         self.flag_reached = False  # Réinitialiser le drapeau pour la prochaine itération
@@ -205,7 +207,7 @@ class Game(arcade.Window):
             x,
             y,
             len(radar_info["coins"]),
-            len(radar_info["enemies"]),
+            # len(radar_info["enemies"]),
             len(radar_info["walls"]),
         )
         return state
@@ -238,7 +240,7 @@ class Game(arcade.Window):
         arcade.draw_text(f"Itération numéro {self.iteration}",10,30,arcade.csscolor.WHITE,18)
         if hasattr(self, 'radar_info'):
             from utils import display_radar_screen
-            display_radar_screen(self, self.radar_info, radius=150)
+            # display_radar_screen(self, self.radar_info, radius=150)
 
 
 
@@ -285,7 +287,7 @@ class Game(arcade.Window):
         self.reward = 0
         if self.physics_engine.can_jump():
             self.can_jump = True
-        self.radar_info = self.radar_detection(radius=150, display_mode="screen")
+        # self.radar_info = self.radar_detection(radius=150, display_mode="screen")
         self.current_state = self.get_state()
         self.physics_engine.update()
         self.player_sprite.update_animation(delta_time)
@@ -297,38 +299,40 @@ class Game(arcade.Window):
             else:
                 action = self.qtable.choose_action(self.current_state)
             
+            
+
             if action == JUMP:
                 if self.physics_engine.can_jump() and self.can_jump:
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
-                    self.reward -= 4
+                    self.reward-=1
             elif action == JUMP_RIGHT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward += 5
+                    self.reward-=1
                     self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == JUMP_LEFT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward -= 10
+                    self.reward-=1
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == LEFT:
-                self.reward -= 10
+                self.reward-=1
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = False
             elif action == RIGHT:
-                self.reward += 10
+                self.reward-=1
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = True
             elif action == SHOOT:
                 self.shoot()
                 radar = self.radar_detection()
-                self.reward -=2
-                if not radar["enemies"]:
-                    print("pas d'ennemis")
-                    self.reward -= 40
+                self.reward -=1
+                # if not radar["enemies"]:
+                #     print("pas d'ennemis")
+                #     self.reward -= 40
 
            
             positive_reward = False
@@ -341,9 +345,9 @@ class Game(arcade.Window):
                 arcade.play_sound(self.collect_coin_sound)
                 
 
-            if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
-                self.reward -= 100
-                self.reset_agent()
+            # if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
+            #     self.reward -= 100
+            #     self.reset_agent()
 
             flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
             for flag in flag_hit_list:
@@ -352,7 +356,7 @@ class Game(arcade.Window):
                 positive_reward = True
                 flag.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
-                display_menu(self)
+                # display_menu(self)
                 self.reset_agent()
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
@@ -366,51 +370,50 @@ class Game(arcade.Window):
             self.last_action = action
             self.current_state = new_state
 
-            if not positive_reward:
-                self.no_reward_steps += 1
-                if self.no_reward_steps >= self.no_reward_limit:
-                    print("DEBUG: Trop longtemps sans récompense. Réinitialisation sans sauvegarde.")
-                    self.flag_reached = False  # Assurez-vous que le drapeau n'est pas marqué comme atteint
-                    self.reset_agent(save_score=False)  # Réinitialisation sans sauvegarde
+            # if not positive_reward:
+            #     self.no_reward_steps += 1
+            #     if self.no_reward_steps >= self.no_reward_limit:
+            #         print("DEBUG: Trop longtemps sans récompense. Réinitialisation sans sauvegarde.")
+            #         self.flag_reached = False  
+            #         self.reset_agent(save_score=False)  
 
-            else:
-                self.no_reward_steps = 0
-
-
+            # else:
+            #     self.no_reward_steps = 0
 
 
 
-        for enemy in self.scene["Enemies"]:
-            enemy.update()
 
-        for bullet in self.bullet_list:
-            hit_wall_list = arcade.check_for_collision_with_list(bullet, self.scene["Walls"])
-            if hit_wall_list:
-                bullet.remove_from_sprite_lists()
 
-            hit_enemy_list = arcade.check_for_collision_with_list(bullet, self.scene["Enemies"])
-            if hit_enemy_list:
-                bullet.remove_from_sprite_lists()
-                for enemy in hit_enemy_list:
-                    enemy.remove_from_sprite_lists()
-                    self.reward+=5
-        for bullet in self.bullet_list:
-            if bullet.right < 0 or bullet.left > WORLD_WIDTH:
-                bullet.remove_from_sprite_lists()
-        self.center_camera_to_player()
+        # for enemy in self.scene["Enemies"]:
+        #     enemy.update()
+
+        # for bullet in self.bullet_list:
+        #     hit_wall_list = arcade.check_for_collision_with_list(bullet, self.scene["Walls"])
+        #     if hit_wall_list:
+        #         bullet.remove_from_sprite_lists()
+
+        #     hit_enemy_list = arcade.check_for_collision_with_list(bullet, self.scene["Enemies"])
+        #     if hit_enemy_list:
+        #         bullet.remove_from_sprite_lists()
+        #         for enemy in hit_enemy_list:
+        #             enemy.remove_from_sprite_lists()
+        #             self.reward+=5
+        # for bullet in self.bullet_list:
+        #     if bullet.right < 0 or bullet.left > WORLD_WIDTH:
+        #         bullet.remove_from_sprite_lists()
+        # self.center_camera_to_player()
 
     def radar_detection(self, radius=150, display_mode="console"):
-        radar_info = {"coins": [], "enemies": [], "walls": []}
-
+        radar_info = {"coins": [], "walls": []}
+    # reucperer tout les ennemis -> ffaux - recuperer le plus proche 
         for sprite_list, key in [
             (self.scene["Coins"], "coins"),
-            (self.scene["Enemies"], "enemies"),
+            # (self.scene["Enemies"], "enemies"),
             (self.scene["Walls"], "walls"),
         ]:
             for sprite in sprite_list:
                 distance = arcade.get_distance_between_sprites(self.player_sprite, sprite)
                 if distance <= radius:
-                    # Calculer la direction
                     direction_x = "right" if sprite.center_x > self.player_sprite.center_x else "left"
                     direction_y = "up" if sprite.center_y > self.player_sprite.center_y else "down"
                     direction = f"{direction_x} {direction_y}"
@@ -424,13 +427,7 @@ class Game(arcade.Window):
                         }
                     )
 
-        # Affichage en console et sur l'ecran
-        if display_mode in ("console", "both"):
-            from utils import display_radar_console
-            display_radar_console(radar_info, radius)
-        if display_mode in ("screen", "both"):
-            from utils import display_radar_screen
-            display_radar_screen(self, radar_info, radius)
+ 
 
         return radar_info
 

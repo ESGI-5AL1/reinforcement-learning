@@ -24,16 +24,6 @@ def place_multi_coins_tiles(self, start, stop, step, COIN_TILE, COIN_SCALING, ce
         self.scene.add_sprite("Coins", coin)
 
 
-def display_radar_console(radar_info, radius):
-    print("\n=== Radar Detection ===")
-    print(f"Radius: {radius} units")
-    for key, objects in radar_info.items():
-        print(f"{key.capitalize()} detected: {len(objects)}")
-        for idx, obj in enumerate(objects, 1):
-            print(
-                f"  {key.capitalize()[:-1]} {idx}: "
-                f"(x: {obj['x']}, y: {obj['y']}, distance: {obj['distance']:.2f}, direction: {obj['direction']})"
-            )
 
 
 def display_radar_screen(self, radar_info, radius):
