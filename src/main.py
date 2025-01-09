@@ -48,6 +48,13 @@ ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT]
 
 QTABLE = None
 
+rewards = {
+    "basic_action": 1,
+    "enemy_collision": 100,
+    "flag_collision": 100,
+    "coin_collision": 20
+}
+
 class Game(arcade.Window):
 
 
@@ -308,28 +315,28 @@ class Game(arcade.Window):
                     self.reward-=1
             elif action == JUMP_RIGHT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward-=1
+                    self.reward -= rewards["basic_action"]
                     self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == JUMP_LEFT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward-=1
+                    self.reward -= rewards["basic_action"]
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == LEFT:
-                self.reward-=1
+                self.reward -= rewards["basic_action"]
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = False
             elif action == RIGHT:
-                self.reward-=1
+                self.reward -= rewards["basic_action"]
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = True
             elif action == SHOOT:
                 self.shoot()
                 radar = self.radar_detection()
-                self.reward -=1
+                self.reward -= rewards["basic_action"]
                 # if not radar["enemies"]:
                 #     print("pas d'ennemis")
                 #     self.reward -= 40
@@ -339,7 +346,7 @@ class Game(arcade.Window):
 
             coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
             for coin in coin_hit_list:
-                self.reward += 20
+                self.reward += rewards["coin_collision"]
                 positive_reward = True
                 coin.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
@@ -351,7 +358,7 @@ class Game(arcade.Window):
 
             flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
             for flag in flag_hit_list:
-                self.reward += 100
+                self.reward += rewards["flag_collision"]
                 self.flag_reached = True
                 positive_reward = True
                 flag.remove_from_sprite_lists()
@@ -360,7 +367,7 @@ class Game(arcade.Window):
                 self.reset_agent()
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
-                self.reward -= 7
+                self.reward -= rewards["flag_collision"]
 
             new_state = self.get_state()
 
