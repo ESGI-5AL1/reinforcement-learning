@@ -4,6 +4,8 @@ import os
 
 import arcade
 
+from src.qtable import QTable
+
 crates_coordinate_list = [[0, 96], [0, 160], [0, 224], [0, 288], [0, 352], [256, 96], [512, 96], [512, 160], [1980, 96],
                           [1980, 160], [1980, 224], [1980, 288], [1980, 352]]
 
@@ -85,19 +87,15 @@ def save_qtable(qtable, file_path="robot.qtable"):
     print(f"QTable sauvegardée dans {file_path}.")
 
 
-def load_qtable(file_path="robot.qtable"):
-    """
-    Charge une QTable depuis un fichier.
-    :param file_path: Le chemin du fichier contenant la QTable.
-    :return: L'instance de la QTable chargée ou None si le fichier n'existe pas.
-    """
+def load_qtable():
     try:
-        with open(file_path, "rb") as file:
+        with open("qtable.pkl", "rb") as file:
             qtable = pickle.load(file)
-            print(f"QTable chargée depuis {file_path}.")
+            if not isinstance(qtable, QTable):
+                raise TypeError("Loaded object is not of type QTable")
             return qtable
-    except FileNotFoundError:
-        print(f"Aucun fichier trouvé à {file_path}. Une nouvelle QTable sera créée.")
+    except (FileNotFoundError, EOFError, TypeError) as e:
+        print(f"Failed to load QTable: {e}")
         return None
 
 
@@ -139,5 +137,6 @@ def plot_scores(filename="scores.pkl"):
     plt.xlabel("Parties")
     plt.ylabel("Scores")
     plt.show(block=True)
+
 
 

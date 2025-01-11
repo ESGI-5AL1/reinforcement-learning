@@ -1,16 +1,13 @@
 import os
 import pickle
+import time
 
 # Utiliser un le rader pour limiter le nombre de tirs
 # Utiliser variables globales pour recompenses
 # ecrase le fichier existant avec une liste vide
 # calculer distance drapeau, baisse -> bonus
 # 
-filename = "scores.pkl"
-if os.path.exists(filename):
-    with open(filename, "wb") as f:
-        pickle.dump([], f)
-    print(f"Le fichier {filename} a été réinitialisé.")
+
 
 import arcade
 import random
@@ -50,18 +47,33 @@ JUMP_LEFT = "JUMP_LEFT"
 SHOOT = "SHOOT"
 ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT]
 
+MAX_EPISODE_STEPS = 1000  # Maximum steps per episode
+MAX_EPISODE_TIME = 60     # Maximum time in seconds per episode
+GOAL_X = 1900            # Flag X position
+OUT_OF_BOUNDS_Y = 0      # Death height
+
 QTABLE = None
 
 rewards = {
+    # Existing rewards
     "basic_action": -1,
     "enemy_collision": -100,
     "flag_collision": +3000,
-    "coin_collision": +20,
+    "coin_collision": +500,
     "wall_collision": -10,
-    "time_is_up":-200
+    "time_is_up": -200,
+
+    # Action-specific costs
+    "action_costs": {
+        "JUMP": -2,        # More costly since it's a powerful vertical move
+        "LEFT": -1,        # Basic movement cost
+        "RIGHT": -1,       # Basic movement cost
+        "JUMP_RIGHT": -3,  # Costly since it's a powerful diagonal move
+        "JUMP_LEFT": -3,   # Costly since it's a powerful diagonal move
+        "SHOOT": -5        # Most costly since it's an attack action
+    }
 }
 
-timer = 40
 
 
 class Game(arcade.Window):
@@ -69,6 +81,18 @@ class Game(arcade.Window):
     def __init__(self):
 
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+
+
+        # Add episode tracking variables
+        self.last_distance = 0
+        self.episode_steps = 0
+        self.episode_start_time = time.time()
+        self.previous_x = SPAWN_X  # Track position to detect stuck agent
+        self.stuck_counter = 0
+        self.steps_without_progress = 0
+
+
+
 
         self.set_update_rate(1 / 10000000)
         self.scores = []
@@ -82,7 +106,7 @@ class Game(arcade.Window):
         self.current_state = None
         self.last_action = None
 
-        self.timer = timer  
+        
         self.time_elapsed = 0 
 
 
@@ -116,6 +140,80 @@ class Game(arcade.Window):
         self.bullet_list = arcade.SpriteList()
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
+
+    def check_termination(self):
+        """Check if episode should terminate and return (done, reason)"""
+        current_time = time.time()
+        episode_time = current_time - self.episode_start_time
+
+        # Check various termination conditions
+        termination_conditions = {
+            # Time limit exceeded
+            "timeout": episode_time >= MAX_EPISODE_TIME,
+
+            # Agent fell off the map
+            "fell_off": self.player_sprite.center_y <= OUT_OF_BOUNDS_Y,
+
+            # Agent is stuck (no x-position change for too long)
+            "stuck": abs(self.player_sprite.center_x - self.previous_x) < 1
+                     and self.stuck_counter > 100,
+
+            # No progress towards goal
+            "no_progress": self.steps_without_progress > 500,
+
+            # Goal reached
+            "success": self.flag_reached,
+        }
+
+        done = any(termination_conditions.values())
+        reason = next((key for key, value in termination_conditions.items()
+                       if value), None)
+
+        return done, reason
+
+    def calculate_final_reward(self, termination_reason):
+        """Calculate final reward based on termination reason"""
+        final_rewards = {
+            "timeout": rewards["time_is_up"],
+            "fell_off": -200,
+            "stuck": -150,
+            "no_progress": -100,
+            "success": rewards["flag_collision"]
+        }
+
+        return final_rewards.get(termination_reason, 0)
+
+    def reset_episode(self):
+        """Reset the environment for a new episode"""
+        self.episode_steps = 0
+        self.episode_start_time = time.time()
+        self.previous_x = SPAWN_X
+        self.stuck_counter = 0
+        self.steps_without_progress = 0
+        self.current_agent_score = 0
+        self.reward = 0
+        self.flag_reached = False
+
+        # Clear existing coins first
+        # if "Coins" in self.scene.name_mapping:
+        #     self.scene["Coins"].clear()
+
+        # Add new coins
+        # self.add_coins()
+
+        # Reset player position
+        self.player_sprite.center_x = SPAWN_X
+        self.player_sprite.center_y = SPAWN_Y
+        self.player_sprite.change_x = 0
+        self.player_sprite.change_y = 0
+
+        # Reset flag
+        if "Flag" in self.scene.name_mapping:
+            self.scene["Flag"].clear()
+        green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
+        green_flag.center_x = GOAL_X
+        green_flag.center_y = 96
+        self.scene.add_sprite("Flag", green_flag)
 
     def setup(self):
         self.camera = arcade.Camera(self.width, self.height)
@@ -191,17 +289,6 @@ class Game(arcade.Window):
         print(self.current_agent_score)
 
         self.current_agent_score=0
-        if save_score and self.flag_reached:
-            filename = "scores.pkl"
-            if os.path.exists(filename):
-                with open(filename, "rb") as f:
-                    scores = pickle.load(f)
-            else:
-                scores = []
-
-            scores.append(self.reward) 
-            with open(filename, "wb") as f:
-                pickle.dump(scores, f)
 
             # print(f"Score sauvegardé pour l'itération {self.iteration}: {self.reward}")
 
@@ -211,35 +298,29 @@ class Game(arcade.Window):
         self.iteration += 1
         self.player_sprite.center_x = SPAWN_X
         self.player_sprite.center_y = SPAWN_Y
-        # self.add_coins()
         self.no_reward_steps = 0
 
-        # Réinitialiser le drapeau
-        green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
-        green_flag.center_x = 1900
-        green_flag.center_y = 96
-        self.scene.add_sprite("Flag", green_flag)
 
     def get_state(self):
         x = int(self.player_sprite.center_x / 50)
         y = int(self.player_sprite.center_y / 50)
-        radar_info = self.radar_detection()
+        #radar_info = self.radar_detection()
 
         state = (
             x,
             y,
-            len(radar_info["coins"]),
+            #len(radar_info["coins"]),
             # len(radar_info["enemies"]),
-            len(radar_info["walls"]),
+            #len(radar_info["walls"]),
         )
         return state
 
-    def shoot(self):
-        bullet = arcade.Sprite(":resources:images/space_shooter/laserBlue01.png", 0.8)
-        bullet.change_x = BULLET_SPEED if self.player_sprite.facing_right else -BULLET_SPEED
-        bullet.center_x = self.player_sprite.center_x
-        bullet.center_y = self.player_sprite.center_y
-        self.bullet_list.append(bullet)
+    #def shoot(self):
+    #    bullet = arcade.Sprite(":resources:images/space_shooter/laserBlue01.png", 0.8)
+    #    bullet.change_x = BULLET_SPEED if self.player_sprite.facing_right else -BULLET_SPEED
+    #    bullet.center_x = self.player_sprite.center_x
+    #    bullet.center_y = self.player_sprite.center_y
+    #    self.bullet_list.append(bullet)
         # arcade.play_sound(self.shoot_sound)
 
     def on_draw(self):
@@ -272,8 +353,8 @@ class Game(arcade.Window):
         elif key == arcade.key.RIGHT or key == arcade.key.D:
             self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
             self.player_sprite.facing_right = True
-        elif key == arcade.key.SPACE:
-            self.shoot()
+        #elif key == arcade.key.SPACE:
+        #    self.shoot()
 
     def on_key_release(self, key, modifiers):
         if key in [arcade.key.LEFT, arcade.key.A, arcade.key.RIGHT, arcade.key.D]:
@@ -298,22 +379,6 @@ class Game(arcade.Window):
 
     def on_update(self, delta_time):
 
-        self.time_elapsed += delta_time
-        if self.time_elapsed >= 1:  
-            self.timer -= 1
-            self.time_elapsed = 0  
-            print(f"Timer: {self.timer} seconds remaining")
-
-        if self.timer <= 0:
-            self.reward-=rewards["time_is_up"]
-            self.reset_agent(save_score=False)
-            self.timer = timer  
-
-
-        filename = "scores.pkl"
-        if not os.path.exists(filename):
-            with open(filename, "wb") as f:
-                pickle.dump([], f)
         self.reward = 0
         if self.physics_engine.can_jump():
             self.can_jump = True
@@ -323,51 +388,66 @@ class Game(arcade.Window):
         self.player_sprite.update_animation(delta_time)
         self.bullet_list.update()
 
+
         if not self.manual:
-            if random.random() < 0.2:
-                action = random.choice(ACTIONS)
+
+            self.episode_steps += 1
+
+            if abs(self.player_sprite.center_x - self.previous_x) < 1:
+                self.stuck_counter += 1
             else:
-                action = self.qtable.choose_action(self.current_state)
+                self.stuck_counter = 0
+
+            # Choose and execute action
+            self.current_state = self.get_state()
+            action = self.qtable.choose_action(self.current_state)
+            self.reward += rewards["action_costs"][action]
 
             if action == JUMP:
                 if self.physics_engine.can_jump() and self.can_jump:
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
-                    self.reward = rewards["basic_action"]
             elif action == JUMP_RIGHT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward = rewards["basic_action"]
                     self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == JUMP_LEFT:
                 if self.physics_engine.can_jump() and self.can_jump:
-                    self.reward = rewards["basic_action"]
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                     self.player_sprite.change_y = PLAYER_JUMP_SPEED
                     self.can_jump = False
             elif action == LEFT:
-                self.reward = rewards["basic_action"]
                 self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = False
             elif action == RIGHT:
-                self.reward = rewards["basic_action"]
                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
                 self.player_sprite.facing_right = True
-            elif action == SHOOT:
-                self.shoot()
-                radar = self.radar_detection()
-                self.reward = rewards["basic_action"]
-                # if not radar["enemies"]:
-                #     print("pas d'ennemis")
-                #     self.reward -= 40
+                #elif action == SHOOT:
+                #    self.shoot()
+                #    radar = self.radar_detection()
+                #    self.reward = rewards["basic_action"]
+                    # if not radar["enemies"]:
+                    #     print("pas d'ennemis")
+                    #     self.reward -= 40
 
-            positive_reward = False
+            # Add progress-based rewards
+            distance_to_flag = abs(1900 - self.player_sprite.center_x)  # Flag is at x=1900
+            progress_reward = -0.01 * distance_to_flag  # Negative reward based on distance
+            self.reward += progress_reward
+
+            # Add height penalty to discourage unnecessary jumping
+            if self.player_sprite.center_y > 200:  # Adjust threshold as needed
+                height_penalty = -0.5 * (self.player_sprite.center_y - 200)
+                self.reward += height_penalty
+
+            # Add energy efficiency bonus
+            if self.physics_engine.can_jump() and abs(self.player_sprite.change_x) < 0.1:
+                self.reward += 1
 
             # coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
             # for coin in coin_hit_list:
             #     self.reward = rewards["coin_collision"]
-            #     positive_reward = True
             #     coin.remove_from_sprite_lists()
             #     arcade.play_sound(self.collect_coin_sound)
 
@@ -379,19 +459,21 @@ class Game(arcade.Window):
             for flag in flag_hit_list:
                 self.reward = rewards["flag_collision"]
                 self.flag_reached = True
-                positive_reward = True
                 flag.remove_from_sprite_lists()
                 arcade.play_sound(self.collect_coin_sound)
                 # display_menu(self)
                 self.reset_agent()
+                self.reset_episode()
 
             if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
                 self.reward = rewards["wall_collision"]
 
             new_state = self.get_state()
+            
 
-            if self.last_action is not None:
-                self.qtable.set(self.current_state, self.last_action, self.reward, new_state)
+            self.qtable.set(self.current_state, action, self.reward, new_state, done=self.flag_reached)
+
+            # self.qtable.print_training_stats()
 
             self.last_action = action
             self.current_state = new_state
@@ -420,9 +502,35 @@ class Game(arcade.Window):
         #         for enemy in hit_enemy_list:
         #             enemy.remove_from_sprite_lists()
         #             self.reward+=5
-        # for bullet in self.bullet_list:
-        #     if bullet.right < 0 or bullet.left > WORLD_WIDTH:
-        #         bullet.remove_from_sprite_lists()
+        for bullet in self.bullet_list:
+            if bullet.right < 0 or bullet.left > WORLD_WIDTH:
+                bullet.remove_from_sprite_lists()
+
+        done, termination_reason = self.check_termination()
+
+        if done:
+            # Add final reward based on termination reason
+            final_reward = self.calculate_final_reward(termination_reason)
+            self.reward += final_reward
+
+            # Log episode information
+            print(f"Episode {self.iteration} terminated: {termination_reason}")
+            print(f"Steps: {self.episode_steps}, Score: {self.current_agent_score}")
+
+            # Get final state
+            new_state = self.get_state()
+
+            # Update Q-table with terminal state
+            self.qtable.set(self.current_state, action, self.reward, new_state, done=True)
+
+            # Reset for next episode
+            self.reset_episode()
+            self.iteration += 1
+        else:
+            # Normal step update
+            new_state = self.get_state()
+            self.qtable.set(self.current_state, action, self.reward, new_state, done=False)
+
         self.current_agent_score += self.reward
         self.center_camera_to_player()
 
