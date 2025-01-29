@@ -1,25 +1,17 @@
-import os
-import pickle
-import time
-
-# Utiliser un le rader pour limiter le nombre de tirs
-# Utiliser variables globales pour recompenses
-# ecrase le fichier existant avec une liste vide
-# calculer distance drapeau, baisse -> bonus
-# 
-
-
 import arcade
 import random
-# from enemy import Enemy
-from qtable import QTable
-from utils import place_multi_coins_tiles, place_multi_planet_tiles, crates_coordinate_list, display_menu, load_qtable, plot_scores, \
-    save_qtable
+import pickle
+import os
 
+from matplotlib import pyplot as plt
+
+from utils import place_multi_planet_tiles, crates_coordinate_list
+
+# Original game constants
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 650
 WORLD_WIDTH = 3000
-SCREEN_TITLE = "MR ROBOT"
+SCREEN_TITLE = "MR ROBOT Q-LEARNING"
 
 CHARACTER_SCALING = 1
 TILE_SCALING = 0.5
@@ -28,544 +20,282 @@ COIN_SCALING = 0.5
 PLAYER_MOVEMENT_SPEED = 5
 GRAVITY = 1
 PLAYER_JUMP_SPEED = 20
-BULLET_SPEED = 10
 
-ROBOT_IDLE = ":resources:images/animated_characters/robot/robot_idle.png"
-PLANET_TILE = ":resources:images/tiles/planet.png"
-BRICK_GREY = ":resources:images/tiles/brickGrey.png"
-COIN_TILE = ":resources:images/items/coinGold.png"
-GREEN_FLAG = ":resources:images/items/flagGreen2.png"
+# Q-Learning constants
+ACTIONS = ['IDLE', 'LEFT', 'RIGHT', 'JUMP', 'JUMP_LEFT', 'JUMP_RIGHT']
+REWARD_GOAL = 1000
+REWARD_DEFAULT = -1
+REWARD_FALL = -100
 
-SPAWN_X = 64
-SPAWN_Y = 128
-
-JUMP = "JUMP"
-LEFT = "LEFT"
-RIGHT = "RIGHT"
-JUMP_RIGHT = "JUMP_RIGHT"
-JUMP_LEFT = "JUMP_LEFT"
-SHOOT = "SHOOT"
-ACTIONS = [JUMP, LEFT, RIGHT, JUMP_RIGHT, JUMP_LEFT]
-
-MAX_EPISODE_STEPS = 1000  # Maximum steps per episode
-MAX_EPISODE_TIME = 60     # Maximum time in seconds per episode
-GOAL_X = 1900            # Flag X position
-OUT_OF_BOUNDS_Y = 0      # Death height
-
-QTABLE = None
-
-rewards = {
-    # Existing rewards
-    "basic_action": -1,
-    "enemy_collision": -100,
-    "flag_collision": +3000,
-    "coin_collision": +500,
-    "wall_collision": -10,
-    "time_is_up": -200,
-
-    # Action-specific costs
-    "action_costs": {
-        "JUMP": -2,        # More costly since it's a powerful vertical move
-        "LEFT": -1,        # Basic movement cost
-        "RIGHT": -1,       # Basic movement cost
-        "JUMP_RIGHT": -3,  # Costly since it's a powerful diagonal move
-        "JUMP_LEFT": -3,   # Costly since it's a powerful diagonal move
-        "SHOOT": -5        # Most costly since it's an attack action
-    }
-}
+FILE_AGENT = 'robot_qtable.pkl'
 
 
+class QTable:
+    def __init__(self, learning_rate=0.2, discount_factor=0.99):
+        self.dic = {}
+        self.learning_rate = learning_rate
+        self.discount_factor = discount_factor
 
-class Game(arcade.Window):
+    @staticmethod
+    def get_state_key(x, y, can_jump):
+        # Discretize the state space to make it manageable
+        x_discrete = int(x / 32)
+        y_discrete = int(y / 32)
+        return x_discrete, y_discrete, can_jump
 
+    def set(self, state, action, reward, new_state):
+        if state not in self.dic:
+            self.dic[state] = {action: 0 for action in ACTIONS}
+        if new_state not in self.dic:
+            self.dic[new_state] = {action: 0 for action in ACTIONS}
+
+        # Q-learning update formula
+        current_q = self.dic[state][action]
+        next_max_q = max(self.dic[new_state].values())
+        self.dic[state][action] = current_q + self.learning_rate * (
+                reward + self.discount_factor * next_max_q - current_q
+        )
+
+    def best_action(self, state, exploration_rate=0):
+        if state not in self.dic or random.random() < exploration_rate:
+            return random.choice(ACTIONS)
+        return max(self.dic[state].items(), key=lambda x: x[1])[0]
+
+
+class QlearningGame(arcade.Window):
     def __init__(self):
-
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
-
-
-        # Add episode tracking variables
-        self.last_distance = 0
-        self.episode_steps = 0
-        self.episode_start_time = time.time()
-        self.previous_x = SPAWN_X  # Track position to detect stuck agent
-        self.stuck_counter = 0
-        self.steps_without_progress = 0
-
-
-
-
-        self.set_update_rate(1 / 10000000)
-        self.scores = []
-        global QTABLE
-        if QTABLE is None:
-            loaded_qtable = load_qtable()
-            self.qtable = loaded_qtable if loaded_qtable else QTable()
-        else:
-            self.qtable = QTABLE
-
-        self.current_state = None
-        self.last_action = None
-
-        
-        self.time_elapsed = 0 
-
-
+        self.set_update_rate(1/10000)
+        # Game attributes
+        self.previous_distance = 0
         self.scene = None
-        # Déterminer si le joueur ou l'agent a le contrôle
-        self.manual = False
         self.player_sprite = None
-
         self.physics_engine = None
-
         self.camera = None
-
         self.gui_camera = arcade.Camera(self.width, self.height)
+        self.spawn_x = 64
+        self.spawn_y = 128
 
-        self.current_agent_score = 0
-        self.reward = 0
-        self.iteration = 0
-        self.last_score = 0
-        self.no_reward_steps = 0
-        self.no_reward_limit = 1000
-        self.can_jump = True
-        self.flag_reached = False  # Variable pour indiquer si le drapeau est atteint
+        # Q-learning attributes
+        self.qtable = QTable()
+        self.current_state = None
+        self.exploration_rate = 0.75
+        self.episode_steps = 0
+        self.max_steps = 2000
+        self.episodes = 0
+        self.total_reward = 0
 
-        self.collect_coin_sound = arcade.load_sound(":resources:sounds/coin1.wav")
-        self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
-        ##self.shoot_sound = arcade.load_sound(":resources:sounds/laser1.wav")
-
-        self.spawn_x = SPAWN_X
-        self.spawn_y = SPAWN_Y
-
-        self.bullet_list = arcade.SpriteList()
+        # Training history
+        self.episode_rewards = []
+        self.episode_steps_history = []
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
 
-    def check_termination(self):
-        """Check if episode should terminate and return (done, reason)"""
-        current_time = time.time()
-        episode_time = current_time - self.episode_start_time
-
-        # Check various termination conditions
-        termination_conditions = {
-            # Time limit exceeded
-            "timeout": episode_time >= MAX_EPISODE_TIME,
-
-            # Agent fell off the map
-            "fell_off": self.player_sprite.center_y <= OUT_OF_BOUNDS_Y,
-
-            # Agent is stuck (no x-position change for too long)
-            "stuck": abs(self.player_sprite.center_x - self.previous_x) < 1
-                     and self.stuck_counter > 100,
-
-            # No progress towards goal
-            "no_progress": self.steps_without_progress > 500,
-
-            # Goal reached
-            "success": self.flag_reached,
-        }
-
-        done = any(termination_conditions.values())
-        reason = next((key for key, value in termination_conditions.items()
-                       if value), None)
-
-        return done, reason
-
-    def calculate_final_reward(self, termination_reason):
-        """Calculate final reward based on termination reason"""
-        final_rewards = {
-            "timeout": rewards["time_is_up"],
-            "fell_off": -200,
-            "stuck": -150,
-            "no_progress": -100,
-            "success": rewards["flag_collision"]
-        }
-
-        return final_rewards.get(termination_reason, 0)
-
-    def reset_episode(self):
-        """Reset the environment for a new episode"""
-        self.episode_steps = 0
-        self.episode_start_time = time.time()
-        self.previous_x = SPAWN_X
-        self.stuck_counter = 0
-        self.steps_without_progress = 0
-        self.current_agent_score = 0
-        self.reward = 0
-        self.flag_reached = False
-
-        # Clear existing coins first
-        # if "Coins" in self.scene.name_mapping:
-        #     self.scene["Coins"].clear()
-
-        # Add new coins
-        # self.add_coins()
-
-        # Reset player position
-        self.player_sprite.center_x = SPAWN_X
-        self.player_sprite.center_y = SPAWN_Y
-        self.player_sprite.change_x = 0
-        self.player_sprite.change_y = 0
-
-        # Reset flag
-        if "Flag" in self.scene.name_mapping:
-            self.scene["Flag"].clear()
-        green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
-        green_flag.center_x = GOAL_X
-        green_flag.center_y = 96
-        self.scene.add_sprite("Flag", green_flag)
+        # Load Q-table if exists
+        if os.path.exists(FILE_AGENT):
+            with open(FILE_AGENT, 'rb') as f:
+                self.qtable.dic = pickle.load(f)
 
     def setup(self):
         self.camera = arcade.Camera(self.width, self.height)
-
         self.scene = arcade.Scene()
 
-        self.player_sprite = arcade.AnimatedWalkingSprite(scale=CHARACTER_SCALING)
-        self.player_sprite.stand_right_textures = [arcade.load_texture(ROBOT_IDLE)]
-        self.player_sprite.stand_left_textures = [arcade.load_texture(ROBOT_IDLE, mirrored=True)]
-        self.player_sprite.walk_right_textures = [
-            arcade.load_texture(f":resources:images/animated_characters/robot/robot_walk{i}.png") for i in range(8)
-        ]
-        self.player_sprite.walk_left_textures = [
-            arcade.load_texture(f":resources:images/animated_characters/robot/robot_walk{i}.png",
-                                mirrored=True) for i in range(8)
-        ]
-        self.player_sprite.center_x = SPAWN_X
-        self.player_sprite.center_y = SPAWN_Y
-        self.player_sprite.facing_right = True
+        # Setup player
+        self.player_sprite = arcade.Sprite(
+            ":resources:images/animated_characters/robot/robot_idle.png",
+            CHARACTER_SCALING
+        )
+        self.player_sprite.center_x = self.spawn_x
+        self.player_sprite.center_y = self.spawn_y
         self.scene.add_sprite("Player", self.player_sprite)
 
-        # self.add_coins()
-
-        place_multi_planet_tiles(self, 0, 2000, 64, PLANET_TILE, TILE_SCALING, 32)
-        place_multi_planet_tiles(self, 1000, 1300, 64, PLANET_TILE, TILE_SCALING, 450)
-        place_multi_planet_tiles(self, 1000, 1400, 64, PLANET_TILE, TILE_SCALING, 200)
-        place_multi_planet_tiles(self, 1528, 1700, 64, PLANET_TILE, TILE_SCALING, 300)
+        # Setup environment
+        place_multi_planet_tiles(self, 0, 2000, 64, ":resources:images/tiles/planet.png", TILE_SCALING, 32)
+        place_multi_planet_tiles(self, 1000, 1300, 64, ":resources:images/tiles/planet.png", TILE_SCALING, 450)
+        place_multi_planet_tiles(self, 1000, 1400, 64, ":resources:images/tiles/planet.png", TILE_SCALING, 200)
+        place_multi_planet_tiles(self, 1528, 1700, 64, ":resources:images/tiles/planet.png", TILE_SCALING, 300)
 
         for coordinate in crates_coordinate_list:
-            wall = arcade.Sprite(BRICK_GREY, TILE_SCALING)
+            wall = arcade.Sprite(":resources:images/tiles/brickGrey.png", TILE_SCALING)
             wall.position = coordinate
             self.scene.add_sprite("Walls", wall)
 
-        green_flag = arcade.Sprite(GREEN_FLAG, COIN_SCALING)
+        green_flag = arcade.Sprite(":resources:images/items/flagGreen2.png", COIN_SCALING)
         green_flag.center_x = 1900
         green_flag.center_y = 96
         self.scene.add_sprite("Flag", green_flag)
-
-        # for x in range(1600, 1800, 100):
-        #     enemy = Enemy(x, 128)
-        #     self.scene.add_sprite("Enemies", enemy)
 
         self.physics_engine = arcade.PhysicsEnginePlatformer(
             self.player_sprite, gravity_constant=GRAVITY, walls=self.scene["Walls"]
         )
 
-    def add_coins(self):
-        place_multi_coins_tiles(self, 128, 1250, 256, COIN_TILE, COIN_SCALING, 96)
-        place_multi_coins_tiles(self, 1000, 1300, 128, COIN_TILE, COIN_SCALING, 270)
-        place_multi_coins_tiles(self, 1000, 1300, 128, COIN_TILE, COIN_SCALING, 520)
-        place_multi_coins_tiles(self, 1528, 1700, 128, COIN_TILE, COIN_SCALING, 370)
-
-        coin = arcade.Sprite(COIN_TILE, COIN_SCALING)
-        coin.center_x = 256
-        coin.center_y = 164
-        self.scene.add_sprite("Coins", coin)
-
-        coin = arcade.Sprite(COIN_TILE, COIN_SCALING)
-        coin.center_x = 512
-        coin.center_y = 228
-        self.scene.add_sprite("Coins", coin)
-
-        coin = arcade.Sprite(COIN_TILE, COIN_SCALING)
-        coin.center_x = 768
-        coin.center_y = 356
-        self.scene.add_sprite("Coins", coin)
-
-    def reset_agent(self, save_score=True):
-        """
-        Réinitialise l'agent pour une nouvelle itération.
-        Sauvegarde le score uniquement si le drapeau a été atteint.
-        """
-        print(self.current_agent_score)
-
-        self.current_agent_score=0
-
-            # print(f"Score sauvegardé pour l'itération {self.iteration}: {self.reward}")
-
-        # Réinitialiser les paramètres pour la prochaine itération
-        self.flag_reached = False  # Réinitialiser le drapeau pour la prochaine itération
-        # self.reward = 0
-        self.iteration += 1
-        self.player_sprite.center_x = SPAWN_X
-        self.player_sprite.center_y = SPAWN_Y
-        self.no_reward_steps = 0
-
-
-    def get_state(self):
-        x = int(self.player_sprite.center_x / 50)
-        y = int(self.player_sprite.center_y / 50)
-        #radar_info = self.radar_detection()
-
-        state = (
-            x,
-            y,
-            #len(radar_info["coins"]),
-            # len(radar_info["enemies"]),
-            #len(radar_info["walls"]),
+        self.current_state = self.qtable.get_state_key(
+            self.player_sprite.center_x,
+            self.player_sprite.center_y,
+            self.physics_engine.can_jump()
         )
-        return state
 
-    #def shoot(self):
-    #    bullet = arcade.Sprite(":resources:images/space_shooter/laserBlue01.png", 0.8)
-    #    bullet.change_x = BULLET_SPEED if self.player_sprite.facing_right else -BULLET_SPEED
-    #    bullet.center_x = self.player_sprite.center_x
-    #    bullet.center_y = self.player_sprite.center_y
-    #    self.bullet_list.append(bullet)
-        # arcade.play_sound(self.shoot_sound)
+    def get_reward(self):
+        # Get flag position
+        flag_sprite = self.scene["Flag"][0]
+        flag_position = (flag_sprite.center_x, flag_sprite.center_y)
 
-    def on_draw(self):
-        self.clear()
+        # Calculate distance to goal
+        current_distance = ((self.player_sprite.center_x - flag_position[0]) ** 2 +
+                            (self.player_sprite.center_y - flag_position[1]) ** 2) ** 0.5
 
-        self.camera.use()
+        # Check if reached flag
+        flag_hit_list = arcade.check_for_collision_with_list(
+            self.player_sprite, self.scene["Flag"]
+        )
+        if flag_hit_list:
+            return REWARD_GOAL
 
-        self.scene.draw()
+        # Check if fell off
+        if self.player_sprite.center_y < 0:
+            return REWARD_FALL
 
-        self.bullet_list.draw()
+        # Progressive reward based on distance to goal
+        if hasattr(self, 'previous_distance'):
+            distance_reward = self.previous_distance - current_distance
+            self.previous_distance = current_distance
+            return distance_reward * 5  # Scale the reward to make it more significant
 
-        self.gui_camera.use()
+        self.previous_distance = current_distance
+        return REWARD_DEFAULT
 
-        score_text = f"Score: {self.current_agent_score}"
+    def execute_action(self, action):
+        # Maintain horizontal momentum instead of resetting to 0
+        current_x_speed = self.player_sprite.change_x
 
-        arcade.draw_text(score_text, 10, 10, arcade.csscolor.WHITE, 18)
-        arcade.draw_text(f"Itération numéro {self.iteration}", 10, 30, arcade.csscolor.WHITE, 18)
-        if hasattr(self, 'radar_info'):
-            from utils import display_radar_screen
-            # display_radar_screen(self, self.radar_info, radius=150)
+        # Apply horizontal movement with smooth acceleration
+        if action in ['LEFT', 'JUMP_LEFT']:
+            target_speed = -PLAYER_MOVEMENT_SPEED
+            self.player_sprite.change_x = max(target_speed, current_x_speed - 0.5)
+        elif action in ['RIGHT', 'JUMP_RIGHT']:
+            target_speed = PLAYER_MOVEMENT_SPEED
+            self.player_sprite.change_x = min(target_speed, current_x_speed + 0.5)
+        else:
+            # Gradually slow down when no horizontal input
+            if abs(current_x_speed) < 0.5:
+                self.player_sprite.change_x = 0
+            elif current_x_speed > 0:
+                self.player_sprite.change_x = current_x_speed - 0.5
+            else:
+                self.player_sprite.change_x = current_x_speed + 0.5
 
-    def on_key_press(self, key, modifiers):
-        if key == arcade.key.UP or key == arcade.key.W:
-            if self.physics_engine.can_jump():
-                self.player_sprite.change_y = PLAYER_JUMP_SPEED
-                arcade.play_sound(self.jump_sound)
-        elif key == arcade.key.LEFT or key == arcade.key.A:
-            self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
-            self.player_sprite.facing_right = False
-        elif key == arcade.key.RIGHT or key == arcade.key.D:
-            self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
-            self.player_sprite.facing_right = True
-        #elif key == arcade.key.SPACE:
-        #    self.shoot()
+        # Handle jumping
+        if 'JUMP' in action and self.physics_engine.can_jump():
+            self.player_sprite.change_y = PLAYER_JUMP_SPEED
 
-    def on_key_release(self, key, modifiers):
-        if key in [arcade.key.LEFT, arcade.key.A, arcade.key.RIGHT, arcade.key.D]:
-            self.player_sprite.change_x = 0
+    def reset_episode(self):
+        # Save episode data only if it's not the first episode
+        if self.episode_steps > 0:  # Make sure we don't record empty episodes
+            self.episode_rewards.append(self.total_reward)
+            self.episode_steps_history.append(self.episode_steps)
+            print(f"Saved metrics - Total Reward: {self.total_reward}, Steps: {self.episode_steps}")
 
+        self.player_sprite.center_x = self.spawn_x
+        self.player_sprite.center_y = self.spawn_y
+        self.player_sprite.change_x = 0
+        self.player_sprite.change_y = 0
+        self.episode_steps = 0
+        self.total_reward = 0
+        self.episodes += 1
+        self.current_state = self.qtable.get_state_key(
+            self.player_sprite.center_x,
+            self.player_sprite.center_y,
+            self.physics_engine.can_jump()
+        )
+
+
+    def on_update(self, delta_time):
+        # Update less frequently to give actions time to complete
+
+        current_state = self.qtable.get_state_key(
+            self.player_sprite.center_x,
+            self.player_sprite.center_y,
+            self.physics_engine.can_jump()
+        )
+
+        # Choose and execute action
+        action = self.qtable.best_action(current_state, self.exploration_rate)
+        self.execute_action(action)
+
+        # Update physics every frame for smooth movement
+        self.physics_engine.update()
+
+        # Get new state and reward
+        new_state = self.qtable.get_state_key(
+            self.player_sprite.center_x,
+            self.player_sprite.center_y,
+            self.physics_engine.can_jump()
+        )
+        reward = self.get_reward()
+
+        # Update Q-table
+        self.qtable.set(current_state, action, reward, new_state)
+        self.total_reward += reward
+        self.episode_steps += 1
+
+        # Check if episode should end
+        if reward == REWARD_GOAL:
+            self.exploration_rate *= 0.95
+            self.reset_episode()
+        elif reward == REWARD_FALL or self.episode_steps >= self.max_steps:
+            self.reset_episode()
+
+            # Save Q-table periodically
+            if self.episodes % 100 == 0:
+                with open(FILE_AGENT, 'wb') as f:
+                    pickle.dump(self.qtable.dic, f)
+
+        self.center_camera_to_player()
     def center_camera_to_player(self):
         screen_center_x = self.player_sprite.center_x - (self.camera.viewport_width / 2)
         screen_center_y = self.player_sprite.center_y - (self.camera.viewport_height / 2)
         self.camera.move_to((max(screen_center_x, 0), max(screen_center_y, 0)))
 
-    def reset_player(self):
-        global QTABLE
-        QTABLE = self.qtable
-        self.player_sprite.center_x = SPAWN_X
-        self.player_sprite.center_y = SPAWN_Y
+    def on_draw(self):
+        self.clear()
+        self.camera.use()
+        self.scene.draw()
+        self.gui_camera.use()
 
-    def on_close(self):
-        global QTABLE
-        QTABLE = self.qtable
-        save_qtable(QTABLE)
-        super().on_close()
-
-    def on_update(self, delta_time):
-
-        self.reward = 0
-        if self.physics_engine.can_jump():
-            self.can_jump = True
-        # self.radar_info = self.radar_detection(radius=150, display_mode="screen")
-        self.current_state = self.get_state()
-        self.physics_engine.update()
-        self.player_sprite.update_animation(delta_time)
-        self.bullet_list.update()
-
-
-        if not self.manual:
-
-            self.episode_steps += 1
-
-            if abs(self.player_sprite.center_x - self.previous_x) < 1:
-                self.stuck_counter += 1
-            else:
-                self.stuck_counter = 0
-
-            # Choose and execute action
-            self.current_state = self.get_state()
-            action = self.qtable.choose_action(self.current_state)
-            self.reward += rewards["action_costs"][action]
-
-            if action == JUMP:
-                if self.physics_engine.can_jump() and self.can_jump:
-                    self.player_sprite.change_y = PLAYER_JUMP_SPEED
-                    self.can_jump = False
-            elif action == JUMP_RIGHT:
-                if self.physics_engine.can_jump() and self.can_jump:
-                    self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
-                    self.player_sprite.change_y = PLAYER_JUMP_SPEED
-                    self.can_jump = False
-            elif action == JUMP_LEFT:
-                if self.physics_engine.can_jump() and self.can_jump:
-                    self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
-                    self.player_sprite.change_y = PLAYER_JUMP_SPEED
-                    self.can_jump = False
-            elif action == LEFT:
-                self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
-                self.player_sprite.facing_right = False
-            elif action == RIGHT:
-                self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
-                self.player_sprite.facing_right = True
-                #elif action == SHOOT:
-                #    self.shoot()
-                #    radar = self.radar_detection()
-                #    self.reward = rewards["basic_action"]
-                    # if not radar["enemies"]:
-                    #     print("pas d'ennemis")
-                    #     self.reward -= 40
-
-            # Add progress-based rewards
-            distance_to_flag = abs(1900 - self.player_sprite.center_x)  # Flag is at x=1900
-            progress_reward = -0.01 * distance_to_flag  # Negative reward based on distance
-            self.reward += progress_reward
-
-            # Add height penalty to discourage unnecessary jumping
-            if self.player_sprite.center_y > 200:  # Adjust threshold as needed
-                height_penalty = -0.5 * (self.player_sprite.center_y - 200)
-                self.reward += height_penalty
-
-            # Add energy efficiency bonus
-            if self.physics_engine.can_jump() and abs(self.player_sprite.change_x) < 0.1:
-                self.reward += 1
-
-            # coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
-            # for coin in coin_hit_list:
-            #     self.reward = rewards["coin_collision"]
-            #     coin.remove_from_sprite_lists()
-            #     arcade.play_sound(self.collect_coin_sound)
-
-            # if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
-            #     self.reward -= 100
-            #     self.reset_agent()
-
-            flag_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"])
-            for flag in flag_hit_list:
-                self.reward = rewards["flag_collision"]
-                self.flag_reached = True
-                flag.remove_from_sprite_lists()
-                arcade.play_sound(self.collect_coin_sound)
-                # display_menu(self)
-                self.reset_agent()
-                self.reset_episode()
-
-            if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Walls"]):
-                self.reward = rewards["wall_collision"]
-
-            new_state = self.get_state()
-            
-
-            self.qtable.set(self.current_state, action, self.reward, new_state, done=self.flag_reached)
-
-            # self.qtable.print_training_stats()
-
-            self.last_action = action
-            self.current_state = new_state
-
-            # if not positive_reward:
-            #     self.no_reward_steps += 1
-            #     if self.no_reward_steps >= self.no_reward_limit:
-            #         print("DEBUG: Trop longtemps sans récompense. Réinitialisation sans sauvegarde.")
-            #         self.flag_reached = False  
-            #         self.reset_agent(save_score=False)  
-
-            # else:
-            #     self.no_reward_steps = 0
-
-        # for enemy in self.scene["Enemies"]:
-        #     enemy.update()
-
-        # for bullet in self.bullet_list:
-        #     hit_wall_list = arcade.check_for_collision_with_list(bullet, self.scene["Walls"])
-        #     if hit_wall_list:
-        #         bullet.remove_from_sprite_lists()
-
-        #     hit_enemy_list = arcade.check_for_collision_with_list(bullet, self.scene["Enemies"])
-        #     if hit_enemy_list:
-        #         bullet.remove_from_sprite_lists()
-        #         for enemy in hit_enemy_list:
-        #             enemy.remove_from_sprite_lists()
-        #             self.reward+=5
-        for bullet in self.bullet_list:
-            if bullet.right < 0 or bullet.left > WORLD_WIDTH:
-                bullet.remove_from_sprite_lists()
-
-        done, termination_reason = self.check_termination()
-
-        if done:
-            # Add final reward based on termination reason
-            final_reward = self.calculate_final_reward(termination_reason)
-            self.reward += final_reward
-
-            # Log episode information
-            print(f"Episode {self.iteration} terminated: {termination_reason}")
-            print(f"Steps: {self.episode_steps}, Score: {self.current_agent_score}")
-
-            # Get final state
-            new_state = self.get_state()
-
-            # Update Q-table with terminal state
-            self.qtable.set(self.current_state, action, self.reward, new_state, done=True)
-
-            # Reset for next episode
-            self.reset_episode()
-            self.iteration += 1
-        else:
-            # Normal step update
-            new_state = self.get_state()
-            self.qtable.set(self.current_state, action, self.reward, new_state, done=False)
-
-        self.current_agent_score += self.reward
-        self.center_camera_to_player()
-
-    def radar_detection(self, radius=150, display_mode="console"):
-        radar_info = {"coins": [], "walls": []}
-        # reucperer tout les ennemis -> ffaux - recuperer le plus proche
-        for sprite_list, key in [
-            # (self.scene["Coins"], "coins"),
-            # (self.scene["Enemies"], "enemies"),
-            (self.scene["Walls"], "walls"),
-        ]:
-            for sprite in sprite_list:
-                distance = arcade.get_distance_between_sprites(self.player_sprite, sprite)
-                if distance <= radius:
-                    direction_x = "right" if sprite.center_x > self.player_sprite.center_x else "left"
-                    direction_y = "up" if sprite.center_y > self.player_sprite.center_y else "down"
-                    direction = f"{direction_x} {direction_y}"
-
-                    radar_info[key].append(
-                        {
-                            "x": round(sprite.center_x, 2),
-                            "y": round(sprite.center_y, 2),
-                            "distance": round(distance, 2),
-                            "direction": direction,
-                        }
-                    )
-
-        return radar_info
+        # Draw training info
+        arcade.draw_text(
+            f"Episode: {self.episodes} Steps: {self.episode_steps} "
+            f"Exploration: {self.exploration_rate:.2f} Reward: {self.total_reward}",
+            10, 10, arcade.color.WHITE, 14
+        )
 
 
 def main():
-    window = Game()
+    window = QlearningGame()
     window.setup()
-    arcade.run()
-    plot_scores()
+
+    try:
+        arcade.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Save Q-table
+        with open(FILE_AGENT, 'wb') as f:
+            pickle.dump(window.qtable.dic, f)
+
+        # Plot training metrics
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+
+        # Plot rewards
+        ax1.plot(window.episode_rewards, label='Episode Reward')
+        ax1.set_title('Training Progress')
+        ax1.set_xlabel('Episode')
+        ax1.set_ylabel('Total Reward')
+        ax1.grid(True)
+        ax1.legend()
+
+        plt.tight_layout()
+        plt.show()
 
 
 if __name__ == "__main__":

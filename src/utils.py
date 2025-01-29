@@ -6,9 +6,8 @@ import arcade
 
 from src.qtable import QTable
 
-crates_coordinate_list = [[0, 96], [0, 160], [0, 224], [0, 288], [0, 352], [256, 96], [512, 96], [512, 160], [1980, 96],
-                          [1980, 160], [1980, 224], [1980, 288], [1980, 352]]
 
+crates_coordinate_list = [[0, 96], [0, 160], [0, 224], [0, 288], [0, 352], [256, 96], [512, 96], [512, 160], [1980, 96], [1980, 160], [1980, 224], [1980, 288], [1980, 352]]
 
 def place_multi_planet_tiles(self, start, stop, step, PLANET_TILE, TILE_SCALING, center_y):
     for x in range(start, stop, step):
