@@ -4,10 +4,21 @@ import os
 
 import arcade
 
-from src.qtable import QTable
+from consts import *
+from enemy import Enemy
 
 
-crates_coordinate_list = [[0, 96], [0, 160], [0, 224], [0, 288], [0, 352], [256, 96], [512, 96], [512, 160], [1980, 96], [1980, 160], [1980, 224], [1980, 288], [1980, 352]]
+
+crates_coordinate_list = [[0, 96], [0, 160], [0, 224], [0, 288], [0, 352], [256, 96], [512, 96], [512, 160],[720, 96], [720, 160],[720,200], [1980, 96], [1980, 160], [1980, 224], [1980, 288], [1980, 352]]
+
+plateform_coordinate_list = [
+    (0, 2000, 32),
+    (1000, 1300, 450),
+    (1000, 1400, 200),
+    (1528, 1700, 300)
+]
+
+
 
 def place_multi_planet_tiles(self, start, stop, step, PLANET_TILE, TILE_SCALING, center_y):
     for x in range(start, stop, step):
@@ -25,117 +36,95 @@ def place_multi_coins_tiles(self, start, stop, step, COIN_TILE, COIN_SCALING, ce
         self.scene.add_sprite("Coins", coin)
 
 
+def setup_player(game, spawn_x, spawn_y):
+    player_sprite = arcade.Sprite(
+        ":resources:images/animated_characters/robot/robot_idle.png",
+        CHARACTER_SCALING
+    )
+    player_sprite.center_x = spawn_x 
+    player_sprite.center_y = spawn_y
+    game.scene.add_sprite("Player", player_sprite)
+    game.player_sprite = player_sprite
+    return player_sprite
 
 
-def display_radar_screen(self, radar_info, radius):
-    base_x, base_y = 10, 580
-    line_height = 20
-
-    arcade.draw_text(f"Radar (Radius: {radius} units):", base_x, base_y, arcade.color.WHITE, 14)
-
-    for idx, (key, objects) in enumerate(radar_info.items(), start=1):
-        y_offset = base_y - idx * line_height
-        arcade.draw_text(f"{key.capitalize()}: {len(objects)}", base_x, y_offset, arcade.color.WHITE, 12)
-
-        for obj_idx, obj in enumerate(objects, start=1):
-            obj_y_offset = y_offset - (obj_idx * line_height)
-            arcade.draw_text(
-                f"  {key.capitalize()[:-1]} {obj_idx}: (x: {obj['x']}, y: {obj['y']}, "
-                f"dist: {obj['distance']:.2f}, dir: {obj['direction']})",
-                base_x + 20,
-                obj_y_offset,
-                arcade.color.WHITE,
-                10,
-            )
+def setup_enemies(game):
+    game.enemy_list = arcade.SpriteList()
+    for pos in ENEMIES_POSITIONS:
+        enemy = Enemy(pos[0], pos[1])
+        game.enemy_list.append(enemy)
+        game.scene.add_sprite("Enemies", enemy)
 
 
-def display_menu(self):
-    while True:
-        print("\n=== Menu ===")
-        print("1. Continuer l'apprentissage")
-        print("2. Quitter le jeu")
-        print("3. Afficher la QTable")
-        print("4. Afficher l'évolution des scores")
-        choice = input("Veuillez entrer votre choix (1, 2, 3 ou 4) : ")
+def setup_plateformes(game):
+    for start_x, end_x, height in plateform_coordinate_list:
+        place_multi_planet_tiles(game, start_x, end_x, 64, ":resources:images/tiles/planet.png", TILE_SCALING, height)
 
-        if choice == "1":
-            print("L'apprentissage continue...")
-            self.reset_agent()
-            break
-        elif choice == "2":
-            print("Merci d'avoir joué !")
-            self.close()
-            break
-        elif choice == "3":
-            self.qtable.print_qtable()
-        elif choice == "4":
-            plot_scores()
-        else:
-            print("Choix invalide. Veuillez réessayer.")
+def setup_walls(game):
+    for coordinate in crates_coordinate_list:
+        wall = arcade.Sprite(":resources:images/tiles/brickGrey.png", TILE_SCALING)
+        wall.position = coordinate
+        game.scene.add_sprite("Walls", wall)
 
+def setup_coins(game):
+   # Pièces sur toutes les plateformes sauf le sol
+   for start_x, end_x, height in plateform_coordinate_list[1:]:
+       place_multi_coins_tiles(game, start_x, end_x, 128, ":resources:images/items/gold_1.png", COIN_SCALING, height + 64)
 
+   # Colonnes de pièces
+   height_groups = {}
+   for x, y in crates_coordinate_list:
+       if x not in height_groups:
+           height_groups[x] = []
+       height_groups[x].append(y)
+   
+   # Ajouter pièces au sommet de chaque colonne
+   for x, heights in height_groups.items():
+       max_height = max(heights)
+       coin = arcade.Sprite(":resources:images/items/gold_1.png", COIN_SCALING)
+       coin.center_x = x
+       coin.center_y = max_height + 64
+       game.scene.add_sprite("Coins", coin)
 
-def save_qtable(qtable, file_path="robot.qtable"):
-    """
-    Sauvegarde la QTable dans un fichier.
-    :param qtable: L'instance de la QTable à sauvegarder.
-    :param file_path: Le chemin du fichier où sauvegarder la QTable.
-    """
-    with open(file_path, "wb") as file:
-        pickle.dump(qtable, file)
-    print(f"QTable sauvegardée dans {file_path}.")
+def setup_flag(game):
+    green_flag = arcade.Sprite(":resources:images/items/flagGreen2.png", COIN_SCALING)
+    green_flag.center_x = 1900
+    green_flag.center_y = 96
+    game.scene.add_sprite("Flag", green_flag)
 
-
-def load_qtable():
-    try:
-        with open("qtable.pkl", "rb") as file:
-            qtable = pickle.load(file)
-            if not isinstance(qtable, QTable):
-                raise TypeError("Loaded object is not of type QTable")
-            return qtable
-    except (FileNotFoundError, EOFError, TypeError) as e:
-        print(f"Failed to load QTable: {e}")
-        return None
-
-
-def print_qtable(qtable):
-    """
-    Affiche les éléments de la QTable dans la console.
-    """
-    print("\n=== QTable ===")
-    for state, actions in qtable.dic.items():
-        print(f"State: {state}")
-        for action, value in actions.items():
-            print(f"  Action: {action}, Value: {value:.2f}")
+def setup_physics(game):
+    game.physics_engine = arcade.PhysicsEnginePlatformer(
+        game.player_sprite, gravity_constant=GRAVITY, walls=game.scene["Walls"]
+    )
+    game.current_state = game.qtable.get_state_key(
+        game.player_sprite.center_x,
+        game.player_sprite.center_y,
+        game.physics_engine.can_jump(),
+        game.get_state_from_radar()
+    )
 
 
-def plot_scores(filename="scores.pkl"):
-    """
-    Charge les scores depuis un fichier et affiche leur évolution de manière simplifiée.
-    """
-    if not os.path.exists(filename):
-        print(f"Aucun fichier trouvé : {filename}.")
-        return
+def update_player_color(game, enemy_detected, flag_detected):
+    if enemy_detected:
+        game.player_sprite.color = (255, 0, 0)  # Rouge
+    elif flag_detected:
+        game.player_sprite.color = (0, 128, 0) 
+    else:
+        game.player_sprite.color = (255, 255, 255) 
 
-    # Charger les scores
-    with open(filename, "rb") as f:
-        scores = pickle.load(f)
 
-    if not scores:
-        print("Aucun score enregistré.")
-        return
 
-    # Afficher le tableau des scores
-    print("\n=== Tableau des scores ===")
-    for iteration, score in enumerate(scores, start=1):
-        print(f"Iteration {iteration}: Score = {score}")
 
-    # Tracer la courbe des scores (style simplifié)
-    plt.plot(scores)
-    plt.title("Évolution des scores")
-    plt.xlabel("Parties")
-    plt.ylabel("Scores")
-    plt.show(block=True)
+
+
+
+
+
+
+
+
+
+
 
 
 

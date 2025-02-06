@@ -18,11 +18,8 @@ class Enemy(arcade.AnimatedWalkingSprite):
             arcade.load_texture(f":resources:images/animated_characters/zombie/zombie_walk{i}.png", mirrored=True)
             for i in range(8)
         ]
-
         self.texture = self.stand_right_textures[0]
-
         self.set_hit_box(self.texture.hit_box_points)
-
         self.center_x = x
         self.center_y = y
         self.change_x = 2
