@@ -59,7 +59,7 @@ class RobotGame(arcade.Window):
         setup_coins(self)
     
 
-
+    
     def get_reward(self):
         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"]):
             return REWARD_GOAL
@@ -79,9 +79,6 @@ class RobotGame(arcade.Window):
         return REWARD_DEFAULT  
     
     def execute_action(self, action):
-        current_time = time.time()
-        if not hasattr(self, 'last_jump_time'):
-            self.last_jump_time = 0
         
         current_x_speed = self.player_sprite.change_x
         if action in ['LEFT', 'JUMP_LEFT']:
@@ -97,13 +94,12 @@ class RobotGame(arcade.Window):
                 self.player_sprite.change_x = current_x_speed + 0.5
 
         if 'JUMP' in action and self.physics_engine.can_jump():
-            if current_time - self.last_jump_time > 0.5:
-                self.player_sprite.change_y = PLAYER_JUMP_SPEED
-                if 'RIGHT' in action:
-                    self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED * 1.2
-                elif 'LEFT' in action:
-                    self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED * 1.2
-                self.last_jump_time = current_time
+
+            self.player_sprite.change_y = PLAYER_JUMP_SPEED
+            if 'RIGHT' in action:
+                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED * 1.2
+            elif 'LEFT' in action:
+                self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED * 1.2
     
 
     def reset_episode(self):
@@ -159,7 +155,7 @@ class RobotGame(arcade.Window):
         self.episode_steps += 1
 
         if reward == REWARD_GOAL:
-            self.exploration_rate *= 0.85
+            self.exploration_rate *= 0.9
             self.reset_episode()
         elif reward == REWARD_DEATH:
             self.reset_episode()

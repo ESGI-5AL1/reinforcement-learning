@@ -34,18 +34,13 @@ def setup_player(game, spawn_x, spawn_y):
     return player_sprite
 
 
+
 def setup_enemies(game):
     game.enemy_list = arcade.SpriteList()
-    
-    # enemy_positions = [ENEMIES_POSITIONS[0], ENEMIES_POSITIONS[-1]] if game.episodes < 50 else \
-    #                  ENEMIES_POSITIONS[:4] if game.episodes < 100 else \
-    #                  ENEMIES_POSITIONS
-    # enemy_positions =[ENEMIES_POSITIONS[0], ENEMIES_POSITIONS[-1]]
     for pos in ENEMIES_POSITIONS:
-        enemy = Enemy(pos[0], pos[1])
-        game.enemy_list.append(enemy)
-        game.scene.add_sprite("Enemies", enemy)
-    
+       enemy = Enemy(pos[0], pos[1]) 
+       game.enemy_list.append(enemy)
+       game.scene.add_sprite("Enemies", enemy)
 
 
 def setup_plateformes(game):
@@ -76,12 +71,13 @@ def setup_coins(game):
             coin.center_x = x
             coin.center_y = max_height + 64
             game.scene.add_sprite("Coins", coin)
-        
-    for x in range(1920, 2100, 30):  
+
+    for x in range(750, 3300, 92):  
         coin = arcade.Sprite(":resources:images/items/gold_1.png", COIN_SCALING)
         coin.center_x = x
-        coin.center_y = 96  # Hauteur du sol
+        coin.center_y = 96   
         game.scene.add_sprite("Coins", coin)
+
 
 
 
@@ -91,7 +87,7 @@ def setup_flag(game):
    green_flag.center_y = 96
    game.scene.add_sprite("Checkpoint", green_flag)
    final_flag = arcade.Sprite(":resources:images/items/flagGreen2.png", COIN_SCALING)
-   final_flag.center_x = 3740
+   final_flag.center_x = 3250
    final_flag.center_y = 96
    game.scene.add_sprite("Flag", final_flag)
 
