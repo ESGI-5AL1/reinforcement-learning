@@ -49,18 +49,19 @@ class RobotGame(arcade.Window):
             with open(FILE_AGENT, 'rb') as f:
                 self.qtable.dic = pickle.load(f)
 
-
     def setup(self):
         self.camera = arcade.Camera(self.width, self.height)
         self.scene = arcade.Scene()
         self.player_sprite = setup_player(self, self.spawn_x, self.spawn_y)
+
         setup_enemies(self)
+        setup_plateformes(self)
+        setup_flag(self)
         setup_plateformes(self)
         setup_walls(self)
         setup_flag(self)
         setup_physics(self)
         setup_coins(self)
-
 
     def get_state_from_radar(self):
         RADAR_RANGE = 200
