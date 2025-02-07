@@ -11,15 +11,14 @@ from qtable import QTable
 from utils import *
 
 # TODO: env variables of enemie
-# TODO :radar drapeau biizare 
-#  todo : qtable n'ap pas l'air d'e^tre sauvegardée correctement 
+# TODO :radar drapeau biizare , rajouter radar les deux drapeaux, rajouter radar pieces
+# TODO : vitesse bizzare 
 class RobotGame(arcade.Window):
     def __init__(self):
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
 
-        self.set_update_rate(1/100000)
+        self.set_update_rate(1/1000000)
 
-        # Game attributes
         self.previous_distance = 0
         self.scene = None
         self.player_sprite = None
@@ -30,29 +29,28 @@ class RobotGame(arcade.Window):
         self.spawn_y = 128
         self.enemy_list = None
 
-        # Q-learning attributes
         self.qtable = QTable()
         self.current_state = None
-        self.exploration_rate = 0.7
+        self.exploration_rate = 0.9
         self.episode_steps = 0
         self.episodes = 0
         self.total_reward = 0
 
-        # Training history
         self.episode_rewards = []
         self.episode_steps_history = []
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
 
-        # Load Q-table if exists
         if os.path.exists(FILE_AGENT):
             with open(FILE_AGENT, 'rb') as f:
                 self.qtable.dic = pickle.load(f)
+
 
     def setup(self):
         self.camera = arcade.Camera(self.width, self.height)
         self.scene = arcade.Scene()
         self.player_sprite = setup_player(self, self.spawn_x, self.spawn_y)
+
 
         setup_enemies(self)
         setup_plateformes(self)
@@ -62,9 +60,13 @@ class RobotGame(arcade.Window):
         setup_flag(self)
         setup_physics(self)
         setup_coins(self)
+    
+
 
     def get_state_from_radar(self):
         RADAR_RANGE = 200
+        RADAR_RANGE_FLAG =1000
+        RADAR_RANGE_CHECKPOINT =600
         HEIGHT_THRESHOLD = 100
         enemy_detected = False
         flag_detected = False
@@ -78,9 +80,10 @@ class RobotGame(arcade.Window):
             'enemy_E': False,
             'enemy_W': False,
             'flag_east': False,
-            'flag_close': False
+            'flag_close': False,
+            'chekpoint_east':False,
+            'checkpoint_close':False
         }
-        # Détection ennemis
         for enemy in self.enemy_list:
             dx = enemy.center_x - player_x
             dy = enemy.center_y - player_y
@@ -93,28 +96,36 @@ class RobotGame(arcade.Window):
                 else:
                     radar['enemy_E' if dx > 0 else 'enemy_W'] = True
                     
-        # Détection drapeau
         flag = self.scene["Flag"][0]
         dx = flag.center_x - player_x
         distance_to_flag = (dx**2 + dy**2)**0.5
         radar['flag_east'] = dx > 0
-        flag_detected = distance_to_flag < RADAR_RANGE
+        flag_detected = distance_to_flag < RADAR_RANGE_FLAG
         radar['flag_close'] = flag_detected
 
+        if len(self.scene["Checkpoint"]) > 0:  
+            checkpoint = self.scene["Checkpoint"][0]
+            dx = checkpoint.center_x - player_x
+            distance_to_checkpoint = (dx**2 + dy**2)**0.5
+            radar['checkpoint_east'] = dx > 0
+            radar['checkpoint_close'] = distance_to_checkpoint < RADAR_RANGE_CHECKPOINT
+        else:
+            radar['checkpoint_east'] = False
+            radar['checkpoint_close'] = False
             
-        update_player_color(self,enemy_detected,flag_detected)
+        update_player_color(self, enemy_detected, flag_detected)
         
         return tuple(radar.values())
 
     def get_reward(self):
-    # Récompenses terminales
         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Flag"]):
             return REWARD_GOAL
         
+        if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"]):
+            return REWARD_CHECKPOINT
+        
         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Enemies"]):
             return REWARD_DEATH
-        # if self.player_sprite.change_y > 0 and self.player_sprite.top > SCREEN_HEIGHT - 100:
-        #     return REWARD_CEILING_HIT 
             
         if self.player_sprite.center_y < 0:
             return REWARD_FALL
@@ -122,9 +133,7 @@ class RobotGame(arcade.Window):
         if arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"]):
             return REWARD_COIN
             
-        # Petite pénalité par step pour encourager l'efficacité
-        return REWARD_DEFAULT  # Généralement une petite valeur négative
-
+        return REWARD_DEFAULT  
     
     def execute_action(self, action):
         current_time = time.time()
@@ -135,10 +144,10 @@ class RobotGame(arcade.Window):
 
         if action in ['LEFT', 'JUMP_LEFT']:
             target_speed = -PLAYER_MOVEMENT_SPEED
-            self.player_sprite.change_x = max(target_speed, current_x_speed - 0.5)
+            self.player_sprite.change_x = self.player_sprite.change_x - 0.5
         elif action in ['RIGHT', 'JUMP_RIGHT']:
             target_speed = PLAYER_MOVEMENT_SPEED
-            self.player_sprite.change_x = min(target_speed, current_x_speed + 0.5)
+            self.player_sprite.change_x =self.player_sprite.change_x+ 0.5
         else:
             if abs(current_x_speed) < 0.5:
                 self.player_sprite.change_x = 0
@@ -155,10 +164,10 @@ class RobotGame(arcade.Window):
                 elif 'LEFT' in action:
                     self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED * 1.2
                 self.last_jump_time = current_time
+    
 
     def reset_episode(self):
-        # Save episode data only if it's not the first episode
-        if self.episode_steps > 0:  # Make sure we don't record empty episodes
+        if self.episode_steps > 0:  
             self.episode_rewards.append(self.total_reward)
             self.episode_steps_history.append(self.episode_steps)
             print(f"Saved metrics - Total Reward: {self.total_reward}, Steps: {self.episode_steps}")
@@ -176,15 +185,28 @@ class RobotGame(arcade.Window):
             self.physics_engine.can_jump(),
             self.get_state_from_radar()
         )
-    # todo: function
+
         for sprite in self.scene["Coins"]:
             sprite.remove_from_sprite_lists()
+        for sprite in self.scene["Checkpoint"]:
+            sprite.remove_from_sprite_lists()
+        for sprite in self.scene["Flag"]:
+            sprite.remove_from_sprite_lists()
+        for sprite in self.scene["Enemies"]:  # Supprimer les ennemis existants
+            sprite.remove_from_sprite_lists()
+
         setup_coins(self)
-
-
+        setup_flag(self)
+        setup_enemies(self)  # Recréer les ennemis selon le nombre d'épisodes
+    
     def on_update(self, delta_time):
-        # Update less frequently to give actions time to complete
-
+        if self.current_state is None:
+                self.current_state = self.qtable.get_state_key(
+                    self.player_sprite.center_x,
+                    self.player_sprite.center_y,
+                    self.physics_engine.can_jump(),
+                    self.get_state_from_radar()
+                )
         self.enemy_list.update()
         self.enemy_list.update_animation()
         current_state = self.qtable.get_state_key(
@@ -214,14 +236,16 @@ class RobotGame(arcade.Window):
         if reward == REWARD_GOAL:
             self.exploration_rate *= 0.95
             self.reset_episode()
-        elif reward == REWARD_DEATH :
+        elif reward == REWARD_DEATH:
             self.reset_episode()
         elif reward == REWARD_COIN:
             coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
             for coin in coin_hit_list:
                 coin.remove_from_sprite_lists()
-
-
+        elif arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"]):
+            checkpoint_hit = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"])
+            for flag in checkpoint_hit:
+                flag.remove_from_sprite_lists()
 
             if self.episodes % 100 == 0:
                 with open(FILE_AGENT, 'wb') as f:
