@@ -49,7 +49,7 @@ crates_coordinate_list = [
 #3 enemies setup 
 # ENEMIES_POSITIONS = [
 #    (1000, 128),    
-#    (2400, 128),    
+#    (2400, 396),    
 #    (3100, 396)    
 # ]
 

@@ -79,6 +79,9 @@ class RobotGame(arcade.Window):
         return REWARD_DEFAULT  
     
     def execute_action(self, action):
+        current_time = time.time()
+        if not hasattr(self, 'last_jump_time'):
+            self.last_jump_time = 0
         
         current_x_speed = self.player_sprite.change_x
         if action in ['LEFT', 'JUMP_LEFT']:
@@ -94,12 +97,14 @@ class RobotGame(arcade.Window):
                 self.player_sprite.change_x = current_x_speed + 0.5
 
         if 'JUMP' in action and self.physics_engine.can_jump():
-
-            self.player_sprite.change_y = PLAYER_JUMP_SPEED
-            if 'RIGHT' in action:
-                 self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED * 1.2
-            elif 'LEFT' in action:
-                self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED * 1.2
+            if current_time - self.last_jump_time > 0.5:
+                self.player_sprite.change_y = PLAYER_JUMP_SPEED
+                if 'RIGHT' in action:
+                    self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED * 1.2
+                elif 'LEFT' in action:
+                    self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED * 1.2
+                self.last_jump_time = current_time
+    
     
 
     def reset_episode(self):
