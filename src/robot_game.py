@@ -124,7 +124,6 @@ class RobotGame(arcade.Window):
         if self.episode_steps > 0:  
             self.episode_rewards.append(self.total_reward)
             self.episode_steps_history.append(self.episode_steps)
-            print(f"Saved metrics - Total Reward: {self.total_reward}, Steps: {self.episode_steps}")
 
         respawn(self)
         
@@ -147,13 +146,11 @@ class RobotGame(arcade.Window):
                 self.manual_control = True  
                 self.state = GameState.PLAYING
                 self.setup()
-                print("Starting Manual Mode")
             elif key == arcade.key.L:
                 self.is_learning_mode = True
                 self.manual_control = False 
                 self.state = GameState.PLAYING
                 self.setup()
-                print("Starting Learning Mode")
         elif self.state == GameState.PLAYING and not self.is_learning_mode:
             self.manual_control = True  
             if key == arcade.key.LEFT:
