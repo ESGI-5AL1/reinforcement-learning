@@ -9,7 +9,7 @@ class QTable:
 
     @staticmethod
     def get_state_key(x, y, can_jump, radar_state):
-        x_discrete = int(x / 128)
+        x_discrete = int(x / 256)
         y_discrete = int(y / 128)
         return (x_discrete, y_discrete, can_jump) + radar_state
 
