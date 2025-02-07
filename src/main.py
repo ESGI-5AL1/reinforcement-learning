@@ -4,7 +4,7 @@ import pickle
 
 from matplotlib import pyplot as plt
 
-from consts import FILE_AGENT
+from qlearning.qlearning_consts import FILE_AGENT
 from robot_game import RobotGame
 
 

@@ -1,5 +1,5 @@
 import random
-from consts import ACTIONS
+from qlearning.qlearning_consts import ACTIONS
 #  remettre l'exploration a zero lors de la
 class QTable:
     def __init__(self, learning_rate=0.2, discount_factor=0.99):
