@@ -26,9 +26,10 @@ def main():
         ax1.set_ylabel('Total Reward')
         ax1.grid(True)
         ax1.legend()
-
+        
         plt.tight_layout()
-        plt.show()
+        if window.manual_control is False:
+            plt.show()
 
 
 if __name__ == "__main__":

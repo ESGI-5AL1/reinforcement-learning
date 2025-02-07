@@ -2,6 +2,7 @@ import time
 import arcade
 import pickle
 import os
+from enum import Enum
 
 from matplotlib import pyplot as plt
 
@@ -11,11 +12,16 @@ from qlearning.qtable import QTable
 from map_setup.map_setup import *
 from radar_utils import compute_checkpoint_position, compute_ennemy_position, compute_flag_positon
 
-
+class GameState(Enum):
+    MENU = "menu"
+    PLAYING = "playing"
 
 class RobotGame(arcade.Window):
     def __init__(self):
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+
+        self.state = GameState.MENU
+        self.is_learning_mode = None
 
         self.set_update_rate(1/1000000)
         self.previous_distance = 0
@@ -37,6 +43,13 @@ class RobotGame(arcade.Window):
 
         self.episode_rewards = []
         self.episode_steps_history = []
+
+        # Mode manuel
+
+        self.manual_control = False
+        self.left = False
+        self.right = False
+        self.up = False
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
 
@@ -126,57 +139,115 @@ class RobotGame(arcade.Window):
         setup_coins(self)
         setup_flag(self)
         setup_enemies(self) 
+        
+    def on_key_press(self, key, modifiers):
+        if self.state == GameState.MENU:
+            if key == arcade.key.M:
+                self.is_learning_mode = False
+                self.manual_control = True  
+                self.state = GameState.PLAYING
+                self.setup()
+                print("Starting Manual Mode")
+            elif key == arcade.key.L:
+                self.is_learning_mode = True
+                self.manual_control = False 
+                self.state = GameState.PLAYING
+                self.setup()
+                print("Starting Learning Mode")
+        elif self.state == GameState.PLAYING and not self.is_learning_mode:
+            self.manual_control = True  
+            if key == arcade.key.LEFT:
+                self.left = True
+            elif key == arcade.key.RIGHT:
+                self.right = True
+            elif key == arcade.key.UP:
+                self.up = True
+
+
+    def on_key_release(self, key, modifiers):
+            if self.manual_control:
+                if key == arcade.key.LEFT:
+                    self.left = False
+                elif key == arcade.key.RIGHT:
+                    self.right = False
+                elif key == arcade.key.UP:
+                    self.up = False
+
     
+    def manual_player_moves(self):
+        if self.manual_control:
+            self.player_sprite.change_x = 0
+            
+            if self.left and not self.right:
+                self.player_sprite.change_x = -PLAYER_MOVEMENT_SPEED
+            elif self.right and not self.left:
+                self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+                
+            if self.up and self.physics_engine.can_jump():
+                self.player_sprite.change_y = PLAYER_JUMP_SPEED
+
     def on_update(self, delta_time):
-        if self.current_state is None:
-                self.current_state = self.qtable.get_state_key(
+        if self.state == GameState.MENU:
+            return
+            
+        if self.state == GameState.PLAYING:
+            self.enemy_list.update()
+            self.enemy_list.update_animation()
+            
+            if self.is_learning_mode:
+                if self.current_state is None:
+                    self.current_state = self.qtable.get_state_key(
+                        self.player_sprite.center_x,
+                        self.player_sprite.center_y,
+                        self.physics_engine.can_jump(),
+                        self.get_state_from_radar()
+                    )
+
+                current_state = self.qtable.get_state_key(
                     self.player_sprite.center_x,
                     self.player_sprite.center_y,
                     self.physics_engine.can_jump(),
                     self.get_state_from_radar()
                 )
-        self.enemy_list.update()
-        self.enemy_list.update_animation()
-        current_state = self.qtable.get_state_key(
-            self.player_sprite.center_x,
-            self.player_sprite.center_y,
-            self.physics_engine.can_jump(),
-            self.get_state_from_radar()
-        )
-        action = self.qtable.best_action(current_state, self.exploration_rate)
-        self.execute_action(action)
-        self.physics_engine.update()
+                action = self.qtable.best_action(current_state, self.exploration_rate)
+                self.execute_action(action)
+                self.physics_engine.update()
 
-        new_state = self.qtable.get_state_key(
-            self.player_sprite.center_x,
-            self.player_sprite.center_y,
-            self.physics_engine.can_jump(),
-            self.get_state_from_radar()
-        )
+                new_state = self.qtable.get_state_key(
+                    self.player_sprite.center_x,
+                    self.player_sprite.center_y,
+                    self.physics_engine.can_jump(),
+                    self.get_state_from_radar()
+                )
 
-        reward = self.get_reward()
-        self.qtable.set(current_state, action, reward, new_state)
-        self.total_reward += reward
-        self.episode_steps += 1
+                reward = self.get_reward()
+                self.qtable.set(current_state, action, reward, new_state)
+                self.total_reward += reward
+                self.episode_steps += 1
+            else:
+                self.manual_player_moves()
+                self.physics_engine.update()
+                reward = self.get_reward()
 
-        if reward == REWARD_GOAL:
-            self.exploration_rate *= 0.9
-            self.reset_episode()
-        elif reward == REWARD_DEATH:
-            self.reset_episode()
-        elif reward == REWARD_COIN:
-            coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
-            for coin in coin_hit_list:
-                coin.remove_from_sprite_lists()
-        elif arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"]):
-            checkpoint_hit = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"])
-            for flag in checkpoint_hit:
-                flag.remove_from_sprite_lists()
-            if self.episodes % 100 == 0:
-                with open(FILE_AGENT, 'wb') as f:
-                    pickle.dump(self.qtable.dic, f)
+            if reward == REWARD_GOAL:
+                if self.is_learning_mode:
+                    self.exploration_rate *= 0.9
+                self.reset_episode()
+            elif reward == REWARD_DEATH:
+                self.reset_episode()
+            elif reward == REWARD_COIN:
+                coin_hit_list = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Coins"])
+                for coin in coin_hit_list:
+                    coin.remove_from_sprite_lists()
+            elif arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"]):
+                checkpoint_hit = arcade.check_for_collision_with_list(self.player_sprite, self.scene["Checkpoint"])
+                for flag in checkpoint_hit:
+                    flag.remove_from_sprite_lists()
+                if self.is_learning_mode and self.episodes % 100 == 0:
+                    with open(FILE_AGENT, 'wb') as f:
+                        pickle.dump(self.qtable.dic, f)
 
-        self.center_camera_to_player()
+            self.center_camera_to_player()
 
     def get_state_from_radar(self):
         
@@ -210,14 +281,31 @@ class RobotGame(arcade.Window):
         self.camera.move_to((max(screen_center_x, 0), max(screen_center_y, 0)))
 
     def on_draw(self):
-        self.clear()
-        self.camera.use()
-        self.scene.draw()
-        self.gui_camera.use()
+            self.clear()
+            
+            if self.state == GameState.MENU:
+                arcade.draw_text(
+                    "Appuyez sur 'M' pour le mode Manuel\nAppuyez sur 'L' pour le mode apprentissage",
+                    self.width // 2,
+                    self.height // 2,
+                    arcade.color.WHITE,
+                    24,
+                    anchor_x="center",
+                    anchor_y="center"
+                )
+            else:
+                self.camera.use()
+                self.scene.draw()
+                self.gui_camera.use()
 
-        # Draw training info
-        arcade.draw_text(
-            f"Episode: {self.episodes} Steps: {self.episode_steps} "
-            f"Exploration: {self.exploration_rate:.2f} Reward: {self.total_reward}",
-            10, 10, arcade.color.WHITE, 14
-        )
+                if self.is_learning_mode:
+                    arcade.draw_text(
+                        f"Episode: {self.episodes} Steps: {self.episode_steps} "
+                        f"Exploration: {self.exploration_rate:.2f} Reward: {self.total_reward}",
+                        10, 10, arcade.color.WHITE, 14
+                    )
+                else:
+                    arcade.draw_text(
+                        "Mode manuel",
+                        10, 10, arcade.color.WHITE, 14
+                    )
