@@ -2,15 +2,15 @@ import random
 from qlearning.qlearning_consts import ACTIONS
 #  remettre l'exploration a zero lors de la
 class QTable:
-    def __init__(self, learning_rate=0.2, discount_factor=0.99):
+    def __init__(self, learning_rate=0.7, discount_factor=0.99):
         self.dic = {}
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
 
     @staticmethod
     def get_state_key(x, y, can_jump, radar_state):
-        x_discrete = int(x / 256)
-        y_discrete = int(y / 128)
+        x_discrete = int(x / 128)  # Plus fine
+        y_discrete = int(y / 64)   # Plus fine
         return (x_discrete, y_discrete, can_jump) + radar_state
 
     def set(self, state, action, reward, new_state):
